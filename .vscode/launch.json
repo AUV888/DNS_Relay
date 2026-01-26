@@ -5,7 +5,7 @@
             "name": "C: gcc build and debug active file",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/DST_Set",
+            "program": "${workspaceFolder}/bin/DNS_Relay",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

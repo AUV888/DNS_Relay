@@ -25,7 +25,7 @@ enum dns_type {
     DNS_TYPE_TXT = 16,
     DNS_TYPE_AAAA = 28
 };
-typedef dns_type dns_type_t;
+typedef enum dns_type dns_type_t;
 
 #define DNS_CLASS_IN 1
 

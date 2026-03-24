@@ -81,5 +81,24 @@ void local_receive() {
     msg_size = recvfrom(local_socket_fd, (void*)&buf_recv, sizeof(buf_recv), 0,
                         (struct sockaddr*)&local_addr, &sock_addr_len);
 
-    // if()
+    if (msg_size > 0) {
+        // convert to dns struct
+
+        // check lru cache
+
+        if (!cache_found) {
+            // check cache file
+
+            if (!cache_found) {
+                // send to father
+                // assign new id for it
+                sendto(remote_socket_fd, (const void*)buf_recv, msg_size, 0,
+                       (const struct sockaddr*)&remote_addr, sock_addr_len);
+            }
+            return;
+        }
+        int buf_to_send_size = 0;
+        sendto(local_socket_fd, (const void*)buf_to_send, buf_to_send_size, 0,
+               (const struct sockaddr*)&local_addr, sock_addr_len);
+    }
 }

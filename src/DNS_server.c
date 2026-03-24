@@ -5,9 +5,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <unistd.h>
+
+#include "../include/DNS_struct.h"
 
 int local_socket_fd = -1;
 int remote_socket_fd = -1;
+int sock_addr_len;
 
 struct sockaddr_in local_addr;
 struct sockaddr_in remote_addr;
@@ -15,6 +19,8 @@ struct sockaddr_in remote_addr;
 char* dns_server_addr = "8.8.8.8";
 
 void server_socket_init() {
+    sock_addr_len = sizeof(local_addr);
+
     local_socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (local_socket_fd < 0) {
         // error
@@ -49,8 +55,31 @@ void server_socket_init() {
     }
     printf("OK\n");
 }
-void server_socket_close() {}
+void server_socket_close() {
+    if (local_socket_fd != -1) {
+        close(local_socket_fd);
+        local_socket_fd = -1;
+    }
+    if (remote_socket_fd != -1) {
+        close(remote_socket_fd);
+        remote_socket_fd = -1;
+    }
+}
 void server_mode_blocking_set() {}
 void server_mode_non_blocking_set() {}
 void remote_receive() {}
-void local_receive() {}
+void local_receive() {
+    uint8_t buf_recv[BUFFER_SIZE];
+    uint8_t buf_to_send[BUFFER_SIZE];
+
+    dns_message_t msg;
+    uint8_t ip_addr[4] = {0, 0, 0, 0};
+
+    int msg_size = -1;
+    int cache_found = 0;
+
+    msg_size = recvfrom(local_socket_fd, (void*)&buf_recv, sizeof(buf_recv), 0,
+                        (struct sockaddr*)&local_addr, &sock_addr_len);
+
+    // if()
+}

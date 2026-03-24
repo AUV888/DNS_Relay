@@ -10,6 +10,7 @@
 
 extern int local_socket_fd;
 extern int remote_socket_fd;
+extern int sock_addr_len;
 
 void server_socket_init();
 void server_socket_close();

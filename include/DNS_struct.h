@@ -25,6 +25,8 @@ enum dns_type {
     DNS_TYPE_TXT = 16,
     DNS_TYPE_AAAA = 28
 };
+/*@brief Enum type of DNS
+ */
 typedef enum dns_type dns_type_t;
 
 #define DNS_CLASS_IN 1
@@ -69,6 +71,8 @@ struct dns_header {
     uint16_t arcount;
 };
 #pragma pack(pop)
+/*@brief DNS header structure
+*/
 typedef struct dns_header dns_header_t;
 
 struct dns_question {
@@ -77,6 +81,8 @@ struct dns_question {
     uint16_t q_class;
     struct dns_question* next;
 };
+/*@brief DNS question structure
+*/
 typedef struct dns_question dns_question_t;
 
 union resource_data {
@@ -109,6 +115,8 @@ union resource_data {
         char* text;
     } txt_record;
 };
+/*@brief DNS resource data structure
+*/
 typedef union resource_data resource_data_t;
 
 struct dns_resource_record {
@@ -120,6 +128,8 @@ struct dns_resource_record {
     resource_data_t rd_data;
     struct dns_resource_record* next;
 };
+/*@brief DNS resource resource structure
+*/
 typedef struct dns_resource_record dns_resource_record_t;
 
 struct dns_message {
@@ -129,5 +139,7 @@ struct dns_message {
     dns_resource_record_t* authority;
     dns_resource_record_t* additional;
 };
+/*@brief DNS message structure
+*/
 typedef struct dns_message dns_message_t;
 #endif

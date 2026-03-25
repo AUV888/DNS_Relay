@@ -12,7 +12,12 @@ extern int local_socket_fd;
 extern int remote_socket_fd;
 extern int sock_addr_len;
 
+/*@brief Initialized the socket
+ */
 void server_socket_init();
+
+/*@brief Close the socket
+ */
 void server_socket_close();
 void server_mode_blocking_set();
 void server_mode_non_blocking_set();

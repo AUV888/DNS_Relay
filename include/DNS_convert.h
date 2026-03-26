@@ -27,4 +27,31 @@ void convert_write_bytes(uint8_t** buf, int bytes, uint32_t value);
 @return 0 for success, -1 for failure
 */
 int dns_message_decode(dns_message_t* msg, const uint8_t* buf, size_t len);
+
+/*
+@brief A utility function to get dns header
+@param msg Output DNS message structure (MUST be allocated by caller)
+@param buf Pointer of buffer
+@return New buffer pointer
+*/
+static inline uint8_t* get_dns_header(dns_message_t* msg, const uint8_t* buf);
+
+/*
+@brief A utility function to get dns question
+@param msg Output DNS message structure (MUST be allocated by caller)
+@param buf Pointer of buffer
+@param start The start of the whole dns message (SHOULD be given by dns_message_decode function)
+@return New buffer pointer
+*/
+static inline uint8_t* get_dns_question(dns_message_t* msg, const uint8_t* buf,
+                                        const uint8_t* start);
+
+/*
+@brief A utility function to get dns domain where it is represented in compression
+@param msg Output DNS message structure (MUST be allocated by caller)
+@param buf Pointer of buffer
+@param start The start of the whole dns message (SHOULD be given by dns_message_decode function)
+@return New buffer pointer
+*/
+static inline uint8_t* get_dns_domain(dns_message_t* msg, const uint8_t* buf, const uint8_t* start);
 #endif

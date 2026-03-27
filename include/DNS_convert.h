@@ -24,9 +24,8 @@ void convert_write_bytes(uint8_t** buf, int bytes, uint32_t value);
 @param msg Output DNS message structure (MUST be allocated by caller)
 @param buf Pointer of buffer
 @param len Length of DNS message
-@return 0 for success, -1 for failure
 */
-int dns_message_decode(dns_message_t* msg, const uint8_t* buf, size_t len);
+void dns_message_decode(dns_message_t* msg, const uint8_t* buf);
 
 /*
 @brief A utility function to get dns header
@@ -54,4 +53,29 @@ static inline uint8_t* get_dns_question(dns_message_t* msg, const uint8_t* buf,
 @return New buffer pointer
 */
 static inline uint8_t* get_dns_domain(dns_message_t* msg, const uint8_t* buf, const uint8_t* start);
+
+/*
+@brief A utility function to get dns answer
+@param msg Output DNS message structure (MUST be allocated by caller)
+@param buf Pointer of buffer
+@param start The start of the whole dns message (SHOULD be given by dns_message_decode function)
+@return New buffer pointer
+*/
+static inline uint8_t* get_dns_ansewr(dns_message_t* msg, const uint8_t* buf, const uint8_t* start);
+
+/*
+@brief A function to convert from dns_message_t buffer to binary data in buffer
+@param msg DNS message structure given
+@param buf Pointer of buffer (caller MUST allocate buffer)
+@param ip_addr IP address
+*/
+void dns_message_encode(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr);
+
+/*
+@brief A utility function to set DNS header
+@param msg DNS message structure given
+@param buf Pointer of buffer (caller MUST allocate buffer)
+@param ip_addr IP address
+*/
+static inline uint8_t* set_dns_header(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr);
 #endif

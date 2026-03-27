@@ -74,3 +74,34 @@ static inline uint8_t* get_dns_question(dns_message_t* msg, const uint8_t* buf,
 
 static inline uint8_t* get_dns_domain(dns_message_t* msg, const uint8_t* buf,
                                       const uint8_t* start) {}
+
+static inline uint8_t* get_dns_ansewr(dns_message_t* msg, const uint8_t* buf,
+                                      const uint8_t* start) {}
+
+void dns_message_decode(dns_message_t* msg, const uint8_t* buf) {
+    uint8_t* start = buf;
+    buf = get_dns_header(msg, buf);
+    buf = get_dns_question(msg, buf, start);
+    buf = get_dns_ansewr(msg, buf, start);
+}
+
+static inline uint8_t* set_dns_header(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr) {
+    dns_header_t* header = msg->header;
+    header->ancount = 1;
+    uint16_t dns_flags = header->flags;
+    DNS_SET_QR(dns_flags, 1);
+    DNS_SET_AA(dns_flags, 1);
+    DNS_SET_RA(dns_flags, 1);
+    DNS_SET_RCODE(dns_flags,
+                  (ip_addr[0] == 0 && ip_addr[1] == 0 && ip_addr[2] == 0 && ip_addr[3] == 0)
+                      ? DNS_RCODE_NXDOMAIN
+                      : DNS_RCODE_OK);
+    convert_write_bytes(&buf, 2, header->id);
+    convert_write_bytes(&buf, 2, dns_flags);
+    convert_write_bytes(&buf, 2, header->qdcount);
+    convert_write_bytes(&buf, 2, header->ancount);
+    convert_write_bytes(&buf, 2, header->nscount);
+    convert_write_bytes(&buf, 2, header->arcount);
+
+    return buf;
+}

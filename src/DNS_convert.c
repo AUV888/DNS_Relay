@@ -6,7 +6,7 @@
 
 #include "../include/DNS_struct.h"
 
-uint32_t convert_read_bytes(uint8_t** buf, int bytes) {
+uint32_t convert_read_bytes(const uint8_t** buf, int bytes) {
     if (bytes == 1) {
         uint8_t val;
         memcpy(&val, *buf, 1);
@@ -22,7 +22,8 @@ uint32_t convert_read_bytes(uint8_t** buf, int bytes) {
         memcpy(&val, *buf, 4);
         *buf += 4;
         return ntohl(val);
-    }
+    } else
+        return 0xFFFFFFFF;
 }
 
 void convert_write_bytes(uint8_t** buf, int bytes, uint32_t value) {
@@ -40,7 +41,7 @@ void convert_write_bytes(uint8_t** buf, int bytes, uint32_t value) {
     }
 }
 
-static inline uint8_t* get_dns_header(dns_message_t* msg, const uint8_t* buf) {
+static inline const uint8_t* get_dns_header(dns_message_t* msg, const uint8_t* buf) {
     msg->header->id = convert_read_bytes(&buf, 2);
     msg->header->flags = convert_read_bytes(&buf, 2);
     msg->header->qdcount = convert_read_bytes(&buf, 2);
@@ -51,11 +52,11 @@ static inline uint8_t* get_dns_header(dns_message_t* msg, const uint8_t* buf) {
     return buf;
 }
 
-static inline uint8_t* get_dns_question(dns_message_t* msg, const uint8_t* buf,
-                                        const uint8_t* start) {
+static inline const uint8_t* get_dns_question(dns_message_t* msg, const uint8_t* buf,
+                                              const uint8_t* start) {
     int qd_cnt = msg->header->qdcount, i = 0;
     for (i = 0; i < qd_cnt; i++) {
-        char name[DNS_RR_NAME_MAX_SIZE];
+        char name[DNS_RR_NAME_MAX_SIZE] = {0};
         dns_question_t* question_ptr = (dns_question_t*)malloc(sizeof(dns_question_t));
 
         buf = get_dns_domain(msg, buf, start);
@@ -72,14 +73,18 @@ static inline uint8_t* get_dns_question(dns_message_t* msg, const uint8_t* buf,
     return buf;
 }
 
-static inline uint8_t* get_dns_domain(dns_message_t* msg, const uint8_t* buf,
-                                      const uint8_t* start) {}
+static inline const uint8_t* get_dns_domain(dns_message_t* msg, const uint8_t* buf,
+                                            const uint8_t* start) {
+    return NULL;
+}
 
-static inline uint8_t* get_dns_ansewr(dns_message_t* msg, const uint8_t* buf,
-                                      const uint8_t* start) {}
+static inline const uint8_t* get_dns_ansewr(dns_message_t* msg, const uint8_t* buf,
+                                            const uint8_t* start) {
+    return NULL;
+}
 
 void dns_message_decode(dns_message_t* msg, const uint8_t* buf) {
-    uint8_t* start = buf;
+    const uint8_t* start = buf;
     buf = get_dns_header(msg, buf);
     buf = get_dns_question(msg, buf, start);
     buf = get_dns_ansewr(msg, buf, start);
@@ -104,4 +109,28 @@ static inline uint8_t* set_dns_header(dns_message_t* msg, uint8_t* buf, uint8_t*
     convert_write_bytes(&buf, 2, header->arcount);
 
     return buf;
+}
+
+static inline uint8_t* set_dns_domain(uint8_t* buf, char* name) {
+    char tmp[DNS_RR_NAME_MAX_SIZE] = {0};
+    memcpy(&(tmp[1]), name, strlen(name));
+
+    int dot_pos = 0, name_cnt = 0, i = 1;
+
+    while (1) {
+        if (tmp[i] == '.') {
+            tmp[dot_pos] = name_cnt;
+            name_cnt = 0;
+            dot_pos = i;
+        } else if (tmp[i] == '\0') {
+            tmp[dot_pos] = name_cnt;
+            tmp[i] = '\0';
+            memcpy(buf, tmp, i + 1);
+            buf += i + 1;
+            return buf;
+        } else {
+            name_cnt++;
+        }
+        i++;
+    }
 }

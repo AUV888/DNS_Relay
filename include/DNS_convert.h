@@ -71,7 +71,7 @@ static inline const uint8_t* get_dns_ansewr(dns_message_t* msg, const uint8_t* b
 @param buf Pointer of buffer (caller MUST allocate buffer)
 @param ip_addr IP address
 */
-void dns_message_encode(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr);
+uint8_t* dns_message_encode(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr);
 
 /*
 @brief A utility function to set DNS header
@@ -87,4 +87,19 @@ static inline uint8_t* set_dns_header(dns_message_t* msg, uint8_t* buf, uint8_t*
 @param name Name of domain
 */
 static inline uint8_t* set_dns_domain(uint8_t* buf, char* name);
+
+/*
+@brief A utility function to set DNS question
+@param msg DNS message structure given
+@param buf Pointer of buffer (caller MUST allocate buffer)
+*/
+static inline uint8_t* set_dns_question(dns_message_t* msg, uint8_t* buf);
+
+/*
+@brief A utility function to set DNS answer
+@param msg DNS message structure given
+@param buf Pointer of buffer (caller MUST allocate buffer)
+@param ip_addr IP address
+*/
+static inline uint8_t* set_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr);
 #endif

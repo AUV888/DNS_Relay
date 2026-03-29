@@ -134,3 +134,38 @@ static inline uint8_t* set_dns_domain(uint8_t* buf, char* name) {
         i++;
     }
 }
+
+static inline uint8_t* set_dns_question(dns_message_t* msg, uint8_t* buf) {
+    dns_question_t* q_ptr = msg->question;
+    for (int i = 0; i < msg->header->qdcount; i++) {
+        buf = set_dns_domain(buf, q_ptr->q_name);
+        convert_write_bytes(&buf, 2, q_ptr->q_type);
+        convert_write_bytes(&buf, 2, q_ptr->q_class);
+        q_ptr = q_ptr->next;
+    }
+    return buf;
+}
+
+static inline uint8_t* set_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr) {
+    dns_resource_record_t* ans_ptr = msg->answer;
+    for (int i = 0; i < msg->header->arcount; i++) {
+        buf = set_dns_domain(&buf, ans_ptr->name);
+        convert_write_bytes(&buf, 2, ans_ptr->rr_class);
+        convert_write_bytes(&buf, 4, ans_ptr->ttl);
+        convert_write_bytes(&buf, 2, ans_ptr->rd_length);
+        for (int j = 0; j < 4; j++) {
+            *buf = ip_addr[j];
+            buf++;
+        }
+
+        ans_ptr = ans_ptr->next;
+    }
+    return buf;
+}
+
+uint8_t* dns_message_encode(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr) {
+    buf = set_dns_header(msg, buf, ip_addr);
+    buf = set_dns_question(msg, buf);
+    buf = set_dns_answer(msg, buf, ip_addr);
+    return buf;
+}

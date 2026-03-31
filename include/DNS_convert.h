@@ -8,7 +8,7 @@
 @param bytes Byte count (1~4)
 @return Value in uint32_t
 */
-uint32_t convert_read_bytes(const uint8_t** buf, int bytes);
+uint32_t convert_read_bytes(uint8_t** buf, int bytes);
 
 /*
 @brief A function to write bytes that caller do not need to use hton every time.
@@ -25,7 +25,7 @@ void convert_write_bytes(uint8_t** buf, int bytes, uint32_t value);
 @param buf Pointer of buffer
 @param len Length of DNS message
 */
-void dns_message_decode(dns_message_t* msg, const uint8_t* buf);
+void dns_message_decode(dns_message_t* msg, uint8_t* buf);
 
 /*
 @brief A utility function to get dns header
@@ -33,7 +33,7 @@ void dns_message_decode(dns_message_t* msg, const uint8_t* buf);
 @param buf Pointer of buffer
 @return New buffer pointer
 */
-static inline const uint8_t* get_dns_header(dns_message_t* msg, const uint8_t* buf);
+static inline uint8_t* get_dns_header(dns_message_t* msg, uint8_t* buf);
 
 /*
 @brief A utility function to get dns question
@@ -42,18 +42,17 @@ static inline const uint8_t* get_dns_header(dns_message_t* msg, const uint8_t* b
 @param start The start of the whole dns message (SHOULD be given by dns_message_decode function)
 @return New buffer pointer
 */
-static inline const uint8_t* get_dns_question(dns_message_t* msg, const uint8_t* buf,
-                                              const uint8_t* start);
+static inline uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf, uint8_t* start);
 
 /*
 @brief A utility function to get dns domain where it is represented in compression
-@param msg Output DNS message structure (MUST be allocated by caller)
-@param buf Pointer of buffer
+@param result Place to store domain (MUST be allocated by caller)
+@param idx Utility variable
+@param buf Pointer of pointer of buffer
 @param start The start of the whole dns message (SHOULD be given by dns_message_decode function)
 @return New buffer pointer
 */
-static inline const uint8_t* get_dns_domain(dns_message_t* msg, const uint8_t* buf,
-                                            const uint8_t* start);
+static inline uint8_t* get_dns_domain(char* result, int* idx, uint8_t** buf, uint8_t* start);
 
 /*
 @brief A utility function to get dns answer
@@ -62,8 +61,7 @@ static inline const uint8_t* get_dns_domain(dns_message_t* msg, const uint8_t* b
 @param start The start of the whole dns message (SHOULD be given by dns_message_decode function)
 @return New buffer pointer
 */
-static inline const uint8_t* get_dns_ansewr(dns_message_t* msg, const uint8_t* buf,
-                                            const uint8_t* start);
+static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t* start);
 
 /*
 @brief A function to convert from dns_message_t buffer to binary data in buffer

@@ -5,8 +5,9 @@
 #include <sys/socket.h>
 
 #include "../include/DNS_struct.h"
+#include "../include/DNS_util.h"
 
-uint32_t convert_read_bytes(const uint8_t** buf, int bytes) {
+uint32_t convert_read_bytes(uint8_t** buf, int bytes) {
     if (bytes == 1) {
         uint8_t val;
         memcpy(&val, *buf, 1);
@@ -41,7 +42,7 @@ void convert_write_bytes(uint8_t** buf, int bytes, uint32_t value) {
     }
 }
 
-static inline const uint8_t* get_dns_header(dns_message_t* msg, const uint8_t* buf) {
+static inline uint8_t* get_dns_header(dns_message_t* msg, uint8_t* buf) {
     msg->header->id = convert_read_bytes(&buf, 2);
     msg->header->flags = convert_read_bytes(&buf, 2);
     msg->header->qdcount = convert_read_bytes(&buf, 2);
@@ -52,14 +53,13 @@ static inline const uint8_t* get_dns_header(dns_message_t* msg, const uint8_t* b
     return buf;
 }
 
-static inline const uint8_t* get_dns_question(dns_message_t* msg, const uint8_t* buf,
-                                              const uint8_t* start) {
-    int qd_cnt = msg->header->qdcount, i = 0;
+static inline uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf, uint8_t* start) {
+    int qd_cnt = msg->header->qdcount, i = 0, idx = 0;
     for (i = 0; i < qd_cnt; i++) {
         char name[DNS_RR_NAME_MAX_SIZE] = {0};
         dns_question_t* question_ptr = (dns_question_t*)malloc(sizeof(dns_question_t));
 
-        buf = get_dns_domain(msg, buf, start);
+        buf = get_dns_domain(name, &idx, buf, start);
 
         question_ptr->q_name = (char*)malloc(strlen(name) + 1);
         memcpy(question_ptr->q_name, name, strlen(name) + 1);
@@ -73,21 +73,93 @@ static inline const uint8_t* get_dns_question(dns_message_t* msg, const uint8_t*
     return buf;
 }
 
-static inline const uint8_t* get_dns_domain(dns_message_t* msg, const uint8_t* buf,
-                                            const uint8_t* start) {
+static inline uint8_t* get_dns_domain(char* result, int* idx, uint8_t** buf, uint8_t* start) {
+    // states
+    enum parser_state { READING_DATA = 0, READING_LENGTH = 1 };
+    typedef enum parser_state parser_state_t;
+
+    // initialize variables
+    parser_state_t state = READING_LENGTH;
+    int char_remain = 0, jmp_cnt = 0;
+
+    // stack for compressed pointers
+    ui8_ptr_stack_t stack;
+    ui8_ptr_stack_init(&stack);
+
+    while (1) {
+        // read char
+        if (state == READING_DATA) {
+            uint8_t ch = convert_read_bytes(buf, 1);
+            if (ch == 0) {             // domain end
+                if (stack.top >= 0) {  // if stack is not empty, jump back
+                    *buf = ui8_ptr_stack_pop(&stack);
+                    state = READING_LENGTH;
+                    continue;
+                } else {
+                    return *buf;  // end of the procedures
+                }
+            }
+            result[*idx] = (char)ch;
+            (*idx)++;
+            if ((*idx) > DNS_RR_NAME_MAX_SIZE)
+                return *buf;
+            char_remain--;
+            if (char_remain == 0)
+                state = READING_LENGTH;
+        }
+        // read length
+        else {
+            // is pointer
+            if (**buf >= 0xC0) {
+                uint16_t offset = (uint16_t)convert_read_bytes(buf, 2);
+                offset &= 0x3FFF;
+                if (offset >= *buf - start) {
+                    // handle error and exit
+                    return NULL;
+                }
+                if (jmp_cnt >= MAX_DNS_JUMP) {
+                    // handle error: too many jumps
+                    return NULL;
+                }
+                // push buf and jump
+                ui8_ptr_stack_push(&stack, *buf);
+                *buf = start + offset;
+                jmp_cnt++;
+                continue;  // continue from new position
+            }
+            // is a value or end of domain
+            else {
+                uint8_t length = (uint8_t)convert_read_bytes(buf, 1);
+                if (length == 0) {         // end of domain
+                    if (stack.top >= 0) {  // if stack is not empty, jump back
+                        *buf = ui8_ptr_stack_pop(&stack);
+                        continue;
+                    } else {
+                        return *buf;  // end of the procedure
+                    }
+                }
+                if (*idx != 0) {
+                    result[*idx] = '.';
+                    (*idx)++;
+                    if ((*idx) > DNS_RR_NAME_MAX_SIZE)
+                        return *buf;
+                }
+                char_remain = length;
+                state = READING_DATA;
+            }
+        }
+    }
+}
+
+static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t* start) {
     return NULL;
 }
 
-static inline const uint8_t* get_dns_ansewr(dns_message_t* msg, const uint8_t* buf,
-                                            const uint8_t* start) {
-    return NULL;
-}
-
-void dns_message_decode(dns_message_t* msg, const uint8_t* buf) {
-    const uint8_t* start = buf;
+void dns_message_decode(dns_message_t* msg, uint8_t* buf) {
+    uint8_t* start = buf;
     buf = get_dns_header(msg, buf);
     buf = get_dns_question(msg, buf, start);
-    buf = get_dns_ansewr(msg, buf, start);
+    buf = get_dns_answer(msg, buf, start);
 }
 
 static inline uint8_t* set_dns_header(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr) {

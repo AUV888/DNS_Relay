@@ -9,9 +9,9 @@ struct ui8_ptr_stack {
 };
 typedef struct ui8_ptr_stack ui8_ptr_stack_t;
 
-extern inline void ui8_ptr_stack_init(ui8_ptr_stack_t* s);
+void ui8_ptr_stack_init(ui8_ptr_stack_t* s);
 
-extern inline int ui8_ptr_stack_push(ui8_ptr_stack_t* s, uint8_t* ptr);
+int ui8_ptr_stack_push(ui8_ptr_stack_t* s, uint8_t* ptr);
 
-extern inline uint8_t* ui8_ptr_stack_pop(ui8_ptr_stack_t* s);
+uint8_t* ui8_ptr_stack_pop(ui8_ptr_stack_t* s);
 #endif

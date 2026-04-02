@@ -1,5 +1,6 @@
 #include "../include/DNS_convert.h"
 
+#include <arpa/inet.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -59,7 +60,7 @@ static inline uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf, uint8_
         char name[DNS_RR_NAME_MAX_SIZE] = {0};
         dns_question_t* question_ptr = (dns_question_t*)malloc(sizeof(dns_question_t));
 
-        buf = get_dns_domain(name, &idx, buf, start);
+        buf = get_dns_domain(name, &idx, &buf, start);
 
         question_ptr->q_name = (char*)malloc(strlen(name) + 1);
         memcpy(question_ptr->q_name, name, strlen(name) + 1);
@@ -152,7 +153,88 @@ static inline uint8_t* get_dns_domain(char* result, int* idx, uint8_t** buf, uin
 }
 
 static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t* start) {
-    return NULL;
+    for (int i = 0; i < msg->header->ancount; i++) {
+        char name[DNS_RR_NAME_MAX_SIZE] = {0};
+        int idx = 0;
+        dns_resource_record_t* rr_ptr =
+            (dns_resource_record_t*)malloc(sizeof(dns_resource_record_t));
+        if (rr_ptr == NULL) {
+            // handle error
+        }
+        buf = get_dns_domain(name, &idx, &buf, start);
+        rr_ptr->name = (char*)malloc(strlen(name));
+        memcpy(rr_ptr->name, name, strlen(name) + 1);
+
+        rr_ptr->type = convert_read_bytes(&buf, 2);
+        rr_ptr->rr_class = convert_read_bytes(&buf, 2);
+        rr_ptr->ttl = convert_read_bytes(&buf, 4);
+        rr_ptr->rd_length = convert_read_bytes(&buf, 2);
+
+        dns_type_t type = (dns_type_t)rr_ptr->type;
+        switch (type) {
+            case DNS_TYPE_A: {
+                for (int j = 0; j < 4; j++) {
+                    rr_ptr->rd_data.a_record.ip_addr[j] = (uint8_t)convert_read_bytes(&buf, 1);
+                }
+                break;
+            }
+            case DNS_TYPE_AAAA: {
+                for (int j = 0; j < 16; j++) {
+                    rr_ptr->rd_data.a_record.ip_addr[j] = (uint8_t)convert_read_bytes(&buf, 1);
+                }
+                break;
+            }
+            case DNS_TYPE_SOA: {
+                char mname[DNS_RR_NAME_MAX_SIZE] = {0}, rname[DNS_RR_NAME_MAX_SIZE] = {0};
+                int m_idx = 0, r_idx = 0;
+                buf = get_dns_domain(mname, &m_idx, &buf, start);
+                buf = get_dns_domain(rname, &r_idx, &buf, start);
+
+                rr_ptr->rd_data.soa_record.mname = (char*)malloc(strlen(mname) + 1);
+                memcpy(rr_ptr->rd_data.soa_record.mname, mname, strlen(mname) + 1);
+
+                rr_ptr->rd_data.soa_record.rname = (char*)malloc(strlen(rname) + 1);
+                memcpy(rr_ptr->rd_data.soa_record.rname, rname, strlen(rname) + 1);
+
+                rr_ptr->rd_data.soa_record.serial = convert_read_bytes(&buf, 4);
+                rr_ptr->rd_data.soa_record.refresh = convert_read_bytes(&buf, 4);
+                rr_ptr->rd_data.soa_record.retry = convert_read_bytes(&buf, 4);
+                rr_ptr->rd_data.soa_record.expire = convert_read_bytes(&buf, 4);
+                rr_ptr->rd_data.soa_record.minimum = convert_read_bytes(&buf, 4);
+                break;
+            }
+            case DNS_TYPE_CNAME: {
+                char cname[DNS_RR_NAME_MAX_SIZE] = {0};
+                int c_idx = 0;
+                buf = get_dns_domain(cname, &c_idx, &buf, start);
+                rr_ptr->rd_data.cname_record.cname = (char*)malloc(strlen(cname) + 1);
+                memcpy(rr_ptr->rd_data.cname_record.cname, cname, strlen(cname) + 1);
+                break;
+            }
+            case DNS_TYPE_MX: {
+                rr_ptr->rd_data.mx_record.preference = (uint16_t)convert_read_bytes(&buf, 2);
+                char exchange[DNS_RR_NAME_MAX_SIZE] = {0};
+                int e_idx = 0;
+                buf = get_dns_domain(exchange, &e_idx, &buf, start);
+                rr_ptr->rd_data.mx_record.exchange = (char*)malloc(strlen(exchange) + 1);
+                memcpy(rr_ptr->rd_data.mx_record.exchange, exchange, strlen(exchange) + 1);
+                break;
+            }
+            case DNS_TYPE_TXT: {
+                rr_ptr->rd_data.txt_record.text = (char*)malloc(rr_ptr->rd_length);
+                memcpy(rr_ptr->rd_data.txt_record.text, buf, rr_ptr->rd_length);
+                buf += rr_ptr->rd_length;
+                break;
+            }
+            default: {
+                buf += rr_ptr->rd_length;
+                break;
+            }
+        }
+        rr_ptr->next = msg->answer;
+        msg->answer = rr_ptr;
+    }
+    return buf;
 }
 
 void dns_message_decode(dns_message_t* msg, uint8_t* buf) {
@@ -221,7 +303,7 @@ static inline uint8_t* set_dns_question(dns_message_t* msg, uint8_t* buf) {
 static inline uint8_t* set_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr) {
     dns_resource_record_t* ans_ptr = msg->answer;
     for (int i = 0; i < msg->header->arcount; i++) {
-        buf = set_dns_domain(&buf, ans_ptr->name);
+        buf = set_dns_domain(buf, ans_ptr->name);
         convert_write_bytes(&buf, 2, ans_ptr->rr_class);
         convert_write_bytes(&buf, 4, ans_ptr->ttl);
         convert_write_bytes(&buf, 2, ans_ptr->rd_length);

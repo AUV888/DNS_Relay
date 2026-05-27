@@ -239,6 +239,7 @@ static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t*
 
 void dns_message_decode(dns_message_t* msg, uint8_t* buf) {
     uint8_t* start = buf;
+    msg->header = (dns_header_t*)malloc(sizeof(dns_header_t));
     buf = get_dns_header(msg, buf);
     buf = get_dns_question(msg, buf, start);
     buf = get_dns_answer(msg, buf, start);
@@ -302,8 +303,9 @@ static inline uint8_t* set_dns_question(dns_message_t* msg, uint8_t* buf) {
 
 static inline uint8_t* set_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr) {
     dns_resource_record_t* ans_ptr = msg->answer;
-    for (int i = 0; i < msg->header->arcount; i++) {
+    for (int i = 0; i < msg->header->ancount; i++) {
         buf = set_dns_domain(buf, ans_ptr->name);
+        convert_write_bytes(&buf, 2, ans_ptr->type);
         convert_write_bytes(&buf, 2, ans_ptr->rr_class);
         convert_write_bytes(&buf, 4, ans_ptr->ttl);
         convert_write_bytes(&buf, 2, ans_ptr->rd_length);

@@ -12,6 +12,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../include/DNS_arguments.h"
 #include "../include/DNS_cache.h"
 #include "../include/DNS_convert.h"
 #include "../include/DNS_id.h"
@@ -24,7 +25,6 @@ int sock_addr_len;
 struct sockaddr_in local_addr;
 struct sockaddr_in remote_addr;
 
-char* dns_server_addr = "8.8.8.8";
 
 cache_set* g_cache;
 

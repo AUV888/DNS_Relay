@@ -1,4 +1,3 @@
-
 # 🚀 DNS Relay - Computer Network Course Design
 
 ## 📖 Project Overview
@@ -8,10 +7,8 @@ A DNS relay server implemented in C language, supporting DNS caching, request fo
 ## ✨ Features
 
 - ✅ **DNS Protocol Parsing** - Full support for DNS message format
-- ✅ **LRU Cache Mechanism** - Efficient caching of DNS query results
+- ✅ **Lazy & Periodic Clenaup Cache Mechanism** - Efficient caching of DNS query results
 - ✅ **Concurrent Processing** - Support for multiple simultaneous clients
-- ✅ **Real-time Statistics** - HTTP API for runtime monitoring
-- ✅ **Cross-platform Management** - Windows GUI management interface
 - ✅ **Configuration Support** - Runtime configuration updates
 
 ## 🛠️ Development Environment

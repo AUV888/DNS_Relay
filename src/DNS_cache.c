@@ -11,7 +11,7 @@ uint32_t hash(const char* str) {
         hash *= 16777619u;
     }
 
-    return hash;
+    return hash % TABLE_MAX_SIZE;
 }
 
 cache_set* create_hset(void) {
@@ -21,7 +21,7 @@ cache_set* create_hset(void) {
 int cache_init(cache_set* s) {
     if (!s)
         return 0;
-    memset(s->bucket, NULL, sizeof(s->bucket));
+    memset(s->bucket, 0, sizeof(s->bucket));
     s->size = 0;
     return 1;
 }
@@ -43,15 +43,23 @@ int cache_destroy(cache_set** s) {
     return 1;
 }
 int cache_insert(cache_set* s, char* src, uint32_t ip, int ttl) {
-    if (!s || !src)
+    if (!s || !src || ttl <= 0)
         return 0;
 
     uint32_t h = hash(src);
     node* cur = s->bucket[h];
 
     while (cur) {
-        if (strcasecmp(cur->domain, src) == 0)
-            return 0;  // 已存在
+        if (strcasecmp(cur->domain, src) == 0) {
+            time_t now = time(NULL);
+            if (cur->ipv4 == ip) {
+                cur->expire_time = now + ttl;
+            } else {
+                cur->ipv4 = ip;
+                cur->expire_time = now + ttl;
+            }
+            return 1;
+        }
         cur = cur->next;
     }
 

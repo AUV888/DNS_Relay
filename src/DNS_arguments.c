@@ -86,7 +86,6 @@ static int handle_short(char opt, int argc, char* argv[], int i, const char* pro
             return 0;
 
         case 'c':
-            /* cached：必须有参数 */
             if (i + 1 < argc && !is_option(argv[i + 1])) {
                 cached_DNS_file = 1;
                 strncpy(cached_file, argv[i + 1], 255);
@@ -99,7 +98,6 @@ static int handle_short(char opt, int argc, char* argv[], int i, const char* pro
             break;
 
         case 's':
-            /* server：必须有参数 */
             if (i + 1 < argc && !is_option(argv[i + 1])) {
                 dns_server_addr = argv[i + 1];
                 return 1;

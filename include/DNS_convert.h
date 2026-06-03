@@ -100,4 +100,10 @@ static inline uint8_t* set_dns_question(dns_message_t* msg, uint8_t* buf);
 @param ip_addr IP address
 */
 static inline uint8_t* set_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr);
+
+/*
+@brief A function to free DNS message
+@param msg DNS message structure given
+*/
+void dns_message_free(dns_message_t* msg);
 #endif

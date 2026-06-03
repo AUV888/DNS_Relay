@@ -162,7 +162,7 @@ static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t*
             // handle error
         }
         buf = get_dns_domain(name, &idx, &buf, start);
-        rr_ptr->name = (char*)malloc(strlen(name));
+        rr_ptr->name = (char*)malloc(strlen(name) + 1);
         memcpy(rr_ptr->name, name, strlen(name) + 1);
 
         rr_ptr->type = convert_read_bytes(&buf, 2);
@@ -324,4 +324,56 @@ uint8_t* dns_message_encode(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr) 
     buf = set_dns_question(msg, buf);
     buf = set_dns_answer(msg, buf, ip_addr);
     return buf;
+}
+
+void dns_message_free(dns_message_t* msg) {
+    if (!msg)
+        return;
+
+    if (msg->header) {
+        free(msg->header);
+        msg->header = NULL;
+    }
+
+    dns_question_t* q = msg->question;
+    while (q) {
+        dns_question_t* nx = q->next;
+        if (q->q_name)
+            free(q->q_name);
+        free(q);
+        q = nx;
+    }
+    msg->question = NULL;
+
+    dns_resource_record_t* a = msg->answer;
+    while (a) {
+        dns_resource_record_t* nx = a->next;
+        if (a->name) {
+            dns_type_t type = (dns_type_t)a->type;
+            switch (type) {
+                case DNS_TYPE_SOA:
+                    free(a->rd_data.soa_record.mname);
+                    free(a->rd_data.soa_record.rname);
+                    break;
+                case DNS_TYPE_CNAME: {
+                    free(a->rd_data.cname_record.cname);
+                    break;
+                }
+                case DNS_TYPE_MX: {
+                    free(a->rd_data.mx_record.exchange);
+                    break;
+                }
+                case DNS_TYPE_TXT: {
+                    free(a->rd_data.txt_record.text);
+                    break;
+                }
+                default:
+                    break;
+            }
+            free(a->name);
+        }
+        free(a);
+        a = nx;
+    }
+    msg->answer = NULL;
 }

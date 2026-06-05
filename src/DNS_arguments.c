@@ -13,17 +13,25 @@ char cached_file[256] = {0};
 
 char* dns_server_addr = NULL;
 
+int dns_listen_port = 53;
+int dns_upstream_port = 53;
+
+char blocking_mode = 1;
+
 static void print_usage(const char* prog) {
     fprintf(stderr,
             "Usage: %s -s <server_ip> [options]\n"
             "\n"
             "Required:\n"
-            "  -s, --server  <ipv4>      upstream DNS server address (dotted decimal)\n"
+            "  -s, --server       <ipv4>     upstream DNS server address (dotted decimal)\n"
             "\n"
             "Optional:\n"
-            "  -d, --debug   [log_file]  output debug log（file name is optional）\n"
-            "  -m, --moredebug [log_file] output more detailed debug log（file name is optional）\n"
-            "  -c, --cached  <file>      read cached DNS from file（file name is required）\n"
+            "  -d, --debug        [log_file] output debug log (file name is optional)\n"
+            "  -m, --moredebug    [log_file] output more detailed debug log (file name is optional)\n"
+            "  -c, --cached       <file>     read cached DNS from file (file name is required)\n"
+            "  -n, --nonblocking             use non-blocking mode (no argument; default is blocking)\n"
+            "  -l, --listenport   <1-65535>  local port to listen for DNS queries (default 53)\n"
+            "  -u, --upstreamport <1-65535>  upstream DNS server port (default 53)\n"
             "\n"
             "  GNU argument style is supported\n"
             "  -d, --d and --debug have no difference\n",
@@ -43,7 +51,8 @@ static int is_option(const char* s) { return s && s[0] == '-'; }
 static char long_to_short(const char* name) {
     if (name[1] == '\0') {
         char c = name[0];
-        if (c == 'd' || c == 'm' || c == 'c' || c == 's' || c == 'i')
+        if (c == 'd' || c == 'm' || c == 'c' || c == 's' || c == 'i' ||
+            c == 'n' || c == 'l' || c == 'u')
             return c;
         return '\0';
     }
@@ -55,7 +64,33 @@ static char long_to_short(const char* name) {
         return 'c';
     if (strcmp(name, "server") == 0)
         return 's';
+    if (strcmp(name, "nonblocking") == 0)
+        return 'n';
+    if (strcmp(name, "listenport") == 0)
+        return 'l';
+    if (strcmp(name, "upstreamport") == 0)
+        return 'u';
     return '\0';
+}
+
+/*
+ * Parse a string as a TCP/UDP port number (1 ~ 65535).
+ * Returns the parsed value, or -1 on any error (non-digit, out of range, empty).
+ */
+static int parse_port_arg(const char* s) {
+    if (!s || *s == '\0')
+        return -1;
+    long v = 0;
+    for (const char* p = s; *p; p++) {
+        if (*p < '0' || *p > '9')
+            return -1;
+        v = v * 10 + (*p - '0');
+        if (v > 65535)
+            return -1;
+    }
+    if (v < 1 || v > 65535)
+        return -1;
+    return (int)v;
 }
 
 static int handle_short(char opt, int argc, char* argv[], int i, const char* prog) {
@@ -107,6 +142,47 @@ static int handle_short(char opt, int argc, char* argv[], int i, const char* pro
             }
             break;
 
+        case 'n':
+            /* Toggle non-blocking mode; consumes no extra argument. */
+            blocking_mode = 0;
+            return 0;
+
+        case 'l':
+            if (i + 1 < argc && !is_option(argv[i + 1])) {
+                int port = parse_port_arg(argv[i + 1]);
+                if (port < 0) {
+                    fprintf(stderr,
+                            "Error: -l/--listenport requires a number in 1~65535, got '%s'.\n",
+                            argv[i + 1]);
+                    print_usage(prog);
+                }
+                dns_listen_port = port;
+                return 1;
+            } else {
+                fprintf(stderr,
+                        "Error: -l/--listenport requires a port number (1~65535).\n");
+                print_usage(prog);
+            }
+            break;
+
+        case 'u':
+            if (i + 1 < argc && !is_option(argv[i + 1])) {
+                int port = parse_port_arg(argv[i + 1]);
+                if (port < 0) {
+                    fprintf(stderr,
+                            "Error: -u/--upstreamport requires a number in 1~65535, got '%s'.\n",
+                            argv[i + 1]);
+                    print_usage(prog);
+                }
+                dns_upstream_port = port;
+                return 1;
+            } else {
+                fprintf(stderr,
+                        "Error: -u/--upstreamport requires a port number (1~65535).\n");
+                print_usage(prog);
+            }
+            break;
+
         default:
             fprintf(stderr, "Error: Unknown option '-%c'.\n", opt);
             print_usage(prog);
@@ -151,7 +227,8 @@ void parse_arguments(int argc, char* argv[]) {
                 p++;
                 int is_last = (*p == '\0');
 
-                if (!is_last && (opt == 'c' || opt == 's' || opt == 'i')) {
+                if (!is_last && (opt == 'c' || opt == 's' || opt == 'i' ||
+                                 opt == 'l' || opt == 'u')) {
                     fprintf(stderr,
                             "Error: Option '-%c' requires an argument and "
                             "must be the last in a combined option string.\n",
@@ -165,6 +242,9 @@ void parse_arguments(int argc, char* argv[]) {
                         debug_mode = 2;
                     if (log_file[0] == '\0')
                         make_default_log_name(log_file, sizeof(log_file));
+                } else if (!is_last && opt == 'n') {
+                    /* -n takes no argument, can appear anywhere in combined form */
+                    blocking_mode = 0;
                 } else {
                     extra = handle_short(opt, argc, argv, i, prog);
                 }

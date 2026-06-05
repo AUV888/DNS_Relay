@@ -56,11 +56,11 @@ void server_socket_init() {
 
     local_addr.sin_family = AF_INET;
     local_addr.sin_addr.s_addr = INADDR_ANY;
-    local_addr.sin_port = htons(DNS_PORT);
+    local_addr.sin_port = htons(dns_listen_port);
 
     remote_addr.sin_family = AF_INET;
     remote_addr.sin_addr.s_addr = inet_addr(dns_server_addr);
-    remote_addr.sin_port = htons(DNS_PORT);
+    remote_addr.sin_port = htons(dns_upstream_port);
 
     int opt = 1;
     if (setsockopt(local_socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {

@@ -11,6 +11,10 @@ extern char cached_file[256];
 
 extern char* dns_server_addr;
 
+extern int dns_listen_port;
+extern int dns_upstream_port;
+extern char blocking_mode;
+
 void parse_arguments(int argc, char* argv[]);
 
 #endif

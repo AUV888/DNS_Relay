@@ -12,6 +12,13 @@
 #include <time.h>
 #include <unistd.h>
 
+/* Helper: set a file descriptor to non-blocking mode. */
+static int set_nonblocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0) return -1;
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+}
+
 #include "../include/DNS_arguments.h"
 #include "../include/DNS_cache.h"
 #include "../include/DNS_convert.h"
@@ -83,6 +90,19 @@ void server_socket_init() {
 
     g_cache = create_hset();
     cache_init(g_cache);
+
+    /* Make both sockets non-blocking so recvfrom returns EAGAIN when the
+     * kernel buffer is empty.  This lets the event loop drain all pending
+     * packets in a single select() wake-up instead of returning to select
+     * after every single datagram. */
+    if (set_nonblocking(local_socket_fd) < 0 || set_nonblocking(remote_socket_fd) < 0) {
+        if (debug_mode) {
+            l = NON_BLOCK_MODE_LOCAL_FSETFL_ERR;
+            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            log_write(pl);
+        }
+        exit(EXIT_FAILURE);
+    }
 
     if (debug_mode) {
         l = SOCKET_INIT_SUCCESS;
@@ -158,22 +178,27 @@ void server_mode_blocking_set() {
             continue;
         }
 
-        // Dispatch ready file descriptors
+        /* Drain all pending packets from each ready socket so that the
+         * kernel buffer never builds up across select() calls. */
         if (FD_ISSET(local_socket_fd, &rset)) {
-            if (debug_mode) {
-                l = BLOCK_MODE_LOCAL_RECEIVE;
-                uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-                log_write(pl);
+            while (1) {
+                if (debug_mode) {
+                    l = BLOCK_MODE_LOCAL_RECEIVE;
+                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    log_write(pl);
+                }
+                if (local_receive() == 0) break;
             }
-            local_receive();
         }
         if (FD_ISSET(remote_socket_fd, &rset)) {
-            if (debug_mode) {
-                l = BLOCK_MODE_REMOTE_RECEIVE;
-                uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-                log_write(pl);
+            while (1) {
+                if (debug_mode) {
+                    l = BLOCK_MODE_REMOTE_RECEIVE;
+                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    log_write(pl);
+                }
+                if (remote_receive() == 0) break;
             }
-            remote_receive();
         }
     }
 }
@@ -277,7 +302,7 @@ static inline void cache_answers_from_msg(dns_message_t* msg) {
     }
 }
 
-void remote_receive() {
+int remote_receive() {
     uint8_t buf_recv[BUFFER_SIZE];
 
     log_event_t l;
@@ -286,13 +311,17 @@ void remote_receive() {
 
     int msg_size = recvfrom(remote_socket_fd, (void*)buf_recv, sizeof(buf_recv), 0,
                             (struct sockaddr*)&upstream_addr, &upstream_len);
+    if (msg_size < 0) {
+        /* EAGAIN / EWOULDBLOCK means the buffer is empty — stop draining. */
+        return 0;
+    }
     if (msg_size < 2) {
         if (debug_mode) {
             l = REMOTE_RECEIVE_MSG_SIZE_ERR;
             uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
             log_write(pl);
         }
-        return;
+        return 1;  /* consumed one (malformed) datagram, keep draining */
     }
 
     uint16_t new_id_be;
@@ -307,7 +336,7 @@ void remote_receive() {
             uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
             log_write(pl);
         }
-        return;
+        return 1;  /* consumed one datagram (dropped), keep draining */
     }
 
     uint16_t orig_id_be = htons(orig_id);
@@ -339,9 +368,10 @@ void remote_receive() {
         uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
         log_write(pl);
     }
+    return 1;  /* successfully processed one datagram */
 }
 
-void local_receive() {
+int local_receive() {
     log_event_t l;
     uint8_t buf_recv[BUFFER_SIZE];
     uint8_t buf_to_send[BUFFER_SIZE];
@@ -352,14 +382,78 @@ void local_receive() {
 
     int msg_size = recvfrom(local_socket_fd, (void*)buf_recv, sizeof(buf_recv), 0,
                             (struct sockaddr*)&client_addr, &client_len);
-    if (msg_size <= 0) {
+    if (msg_size < 0) {
+        /* EAGAIN / EWOULDBLOCK: no more packets in the kernel buffer. */
+        return 0;
+    }
+    if (msg_size == 0) {
         if (debug_mode) {
             l = LOCAL_RECEIVE_RECVFROM_FAILED;
             uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
             pl |= (INFO_MASK & ntohl(client_addr.sin_addr.s_addr));
             log_write(pl);
         }
-        return;
+        return 1;  /* consumed one (empty) datagram, keep draining */
+    }
+
+    /* ------------------------------------------------------------------
+     * Fast path: try to satisfy the query from cache without any heap
+     * allocation.  Falls through to the full decode path on miss.
+     * ------------------------------------------------------------------ */
+    if (g_cache != NULL && msg_size >= 12) {
+        dns_query_fast_t qf;
+        if (dns_query_decode_fast(buf_recv, msg_size, &qf) &&
+            qf.q_type == DNS_TYPE_A) {
+            if (debug_mode) {
+                l = LOCAL_RECEIVE_CAN_RESOLVE_LOCALLY;
+                uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                log_write(pl);
+            }
+            uint32_t ip = 0;
+            if (cache_find(g_cache, qf.q_name, &ip)) {
+                if (debug_mode) {
+                    l = LOCAL_RECEIVE_HIT_CACHE;
+                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    pl |= (INFO_MASK & ip);
+                    log_write(pl);
+                }
+                uint8_t ip_addr[4];
+                ip_addr[0] = (uint8_t)((ip >> 24) & 0xFF);
+                ip_addr[1] = (uint8_t)((ip >> 16) & 0xFF);
+                ip_addr[2] = (uint8_t)((ip >> 8) & 0xFF);
+                ip_addr[3] = (uint8_t)(ip & 0xFF);
+
+                int nxdomain = (ip == 0);
+                int reply_size = dns_reply_encode_fast(&qf, ip_addr, nxdomain,
+                                                       buf_to_send);
+                if (reply_size > 0) {
+                    sendto(local_socket_fd, (const void*)buf_to_send, reply_size,
+                           0, (const struct sockaddr*)&client_addr, client_len);
+                } else {
+                    if (debug_mode) {
+                        l = LOCAL_RECEIVE_REPLY_SIZE_ERROR;
+                        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                        log_write(pl);
+                    }
+                }
+                if (debug_mode) {
+                    l = LOCAL_RECEIVE_DNS_MESSAGE_FREE_SUCCESS;
+                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    log_write(pl);
+                }
+                return 1;
+            }
+        }
+    }
+
+    /* ------------------------------------------------------------------
+     * Slow path: full decode (cache miss, non-A query, or fast-decode
+     * failure).  Forward the query to the upstream resolver.
+     * ------------------------------------------------------------------ */
+    if (debug_mode) {
+        l = LOCAL_RECEIVE_CANNOT_HIT_CACHE;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
     }
 
     dns_message_t msg;
@@ -373,94 +467,7 @@ void local_receive() {
             log_write(pl);
         }
         dns_message_free(&msg);
-        return;
-    }
-
-    // we only cached A record
-    int can_resolve_locally = (msg.header->qdcount >= 1) && (msg.question != NULL) &&
-                              (msg.question->q_name != NULL) &&
-                              (msg.question->q_type == DNS_TYPE_A);
-
-    if (can_resolve_locally && g_cache != NULL) {
-        if (debug_mode) {
-            l = LOCAL_RECEIVE_CAN_RESOLVE_LOCALLY;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-            log_write(pl);
-        }
-        uint32_t ip = 0;
-        if (cache_find(g_cache, msg.question->q_name, &ip)) {
-            if (debug_mode) {
-                l = LOCAL_RECEIVE_HIT_CACHE;
-                uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-                pl |= (INFO_MASK & ip);
-                log_write(pl);
-            }
-            uint8_t ip_addr[4];
-            ip_addr[0] = (uint8_t)((ip >> 24) & 0xFF);
-            ip_addr[1] = (uint8_t)((ip >> 16) & 0xFF);
-            ip_addr[2] = (uint8_t)((ip >> 8) & 0xFF);
-            ip_addr[3] = (uint8_t)(ip & 0xFF);
-
-            dns_resource_record_t* ans =
-                (dns_resource_record_t*)malloc(sizeof(dns_resource_record_t));
-            if (ans) {
-                memset(ans, 0, sizeof(*ans));
-                size_t nlen = strlen(msg.question->q_name);
-                ans->name = (char*)malloc(nlen + 1);
-                if (ans->name) {
-                    memcpy(ans->name, msg.question->q_name, nlen + 1);
-                } else {
-                    if (debug_mode) {
-                        l = LOCAL_RECEIVE_ANS_NAME_MALLOC_FAILED;
-                        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-                        log_write(pl);
-                    }
-                    /* Bug #4: free ans before returning to avoid memory leak */
-                    free(ans);
-                    dns_message_free(&msg);
-                    return;
-                }
-                ans->type = DNS_TYPE_A;
-                ans->rr_class = DNS_CLASS_IN;
-                ans->ttl = 300;
-                ans->rd_length = 4;
-                memcpy(ans->rd_data.a_record.ip_addr, ip_addr, 4);
-                ans->next = NULL;
-                msg.answer = ans;
-
-                uint8_t* end = dns_message_encode(&msg, buf_to_send, ip_addr);
-                int reply_size = (int)(end - buf_to_send);
-                if (reply_size > 0) {
-                    sendto(local_socket_fd, (const void*)buf_to_send, reply_size, 0,
-                           (const struct sockaddr*)&client_addr, client_len);
-                } else {
-                    if (debug_mode) {
-                        l = LOCAL_RECEIVE_REPLY_SIZE_ERROR;
-                        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-                        log_write(pl);
-                    }
-                }
-            } else {
-                if (debug_mode) {
-                    l = LOCAL_RECEIVE_ANS_MALLOC_FAILED;
-                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-                    log_write(pl);
-                }
-            }
-            dns_message_free(&msg);
-            if (debug_mode) {
-                l = LOCAL_RECEIVE_DNS_MESSAGE_FREE_SUCCESS;
-                uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-                log_write(pl);
-            }
-            return;
-        }
-    }
-
-    if (debug_mode) {
-        l = LOCAL_RECEIVE_CANNOT_HIT_CACHE;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-        log_write(pl);
+        return 1;  /* consumed one datagram */
     }
 
     uint16_t orig_id = msg.header->id;
@@ -473,7 +480,7 @@ void local_receive() {
             log_write(pl);
         }
         dns_message_free(&msg);
-        return;
+        return 1;
     }
 
     uint16_t new_id_be = htons(new_id);
@@ -488,4 +495,5 @@ void local_receive() {
         log_write(pl);
     }
     dns_message_free(&msg);
+    return 1;
 }

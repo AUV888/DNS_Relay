@@ -114,4 +114,45 @@ static inline uint8_t* set_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t*
 @param msg DNS message structure given
 */
 void dns_message_free(dns_message_t* msg);
+
+/* -----------------------------------------------------------------------
+ * Fast path: parse only the query header + first question (no heap alloc).
+ * Used for cache-hit responses to avoid malloc/free in the hot path.
+ * ----------------------------------------------------------------------- */
+
+typedef struct {
+    uint16_t id;             /* transaction ID (host byte order) */
+    uint16_t flags;          /* original flags from client query  */
+    char     q_name[DNS_RR_NAME_MAX_SIZE]; /* decoded domain name  */
+    uint16_t q_type;         /* QTYPE (host byte order)           */
+    uint16_t q_class;        /* QCLASS (host byte order)          */
+    /* Pointer to the raw question wire bytes (for copying into reply). */
+    const uint8_t* q_wire_start; /* points inside the original buf    */
+    int            q_wire_len;   /* length of the question section    */
+} dns_query_fast_t;
+
+/*
+ * @brief Parse a DNS query packet into dns_query_fast_t without any heap
+ *        allocation.  Only the first question record is decoded.
+ *
+ * @param buf   Raw packet bytes.
+ * @param len   Packet length.
+ * @param out   Caller-allocated output struct.
+ * @return 1 on success, 0 on malformed/truncated input.
+ */
+int dns_query_decode_fast(const uint8_t* buf, int len, dns_query_fast_t* out);
+
+/*
+ * @brief Build a DNS A-record reply directly into dst without any heap
+ *        allocation, using the pre-parsed query from dns_query_decode_fast.
+ *
+ * @param q        Query parsed by dns_query_decode_fast.
+ * @param ip_addr  4-byte IPv4 address (big-endian array).
+ * @param nxdomain If non-zero, set RCODE=NXDOMAIN and omit the answer RR.
+ * @param dst      Output buffer (caller must ensure >= 512 bytes).
+ * @return Number of bytes written, or -1 on error.
+ */
+int dns_reply_encode_fast(const dns_query_fast_t* q, const uint8_t ip_addr[4],
+                          int nxdomain, uint8_t* dst);
+
 #endif

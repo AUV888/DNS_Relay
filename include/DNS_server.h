@@ -26,7 +26,8 @@ void server_socket_init();
 void server_socket_close();
 void server_mode_blocking_set();
 void server_mode_non_blocking_set();
-void remote_receive();
-void local_receive();
+/* Returns 1 if a packet was processed, 0 if no more packets (EAGAIN/error). */
+int remote_receive();
+int local_receive();
 
 #endif

@@ -3,7 +3,7 @@
 
 #include <inttypes.h>
 #include <time.h>
-#define TABLE_MAX_SIZE 8192
+#define TABLE_MAX_SIZE 1048576
 
 uint32_t hash(const char* str);
 

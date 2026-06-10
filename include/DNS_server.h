@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 
 #define BUFFER_SIZE 1500
-#define ID_LIST_SIZE 1024
+#define ID_LIST_SIZE 8192
 
 extern int local_socket_fd;
 extern int remote_socket_fd;

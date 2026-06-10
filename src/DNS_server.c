@@ -118,6 +118,9 @@ void server_mode_blocking_set() {
     int maxfd = (local_socket_fd > remote_socket_fd ? local_socket_fd : remote_socket_fd) + 1;
 
     while (1) {
+        if (g_shutdown) {
+            return;
+        }
         fd_set rset;
         FD_ZERO(&rset);
         FD_SET(local_socket_fd, &rset);
@@ -221,6 +224,9 @@ void server_mode_non_blocking_set() {
     time_t last_sweep = time(NULL);
 
     while (1) {
+        if (g_shutdown) {
+            return;
+        }
         local_receive();
         if (debug_mode) {
             l = NON_BLOCK_MODE_LOCAL_RECEIVE;
@@ -325,7 +331,7 @@ void remote_receive() {
         }
         dns_message_t msg;
         memset(&msg, 0, sizeof(msg));
-        dns_message_decode(&msg, buf_recv);
+        dns_message_decode(&msg, buf_recv, msg_size);
         cache_answers_from_msg(&msg);
         dns_message_free(&msg);
     } else if (g_cache == NULL && debug_mode) {
@@ -358,7 +364,7 @@ void local_receive() {
 
     dns_message_t msg;
     memset(&msg, 0, sizeof(msg));
-    dns_message_decode(&msg, buf_recv);
+    dns_message_decode(&msg, buf_recv, msg_size);
 
     if (msg.header == NULL) {
         if (debug_mode) {
@@ -409,6 +415,9 @@ void local_receive() {
                         uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
                         log_write(pl);
                     }
+                    /* Bug #4: free ans before returning to avoid memory leak */
+                    free(ans);
+                    dns_message_free(&msg);
                     return;
                 }
                 ans->type = DNS_TYPE_A;

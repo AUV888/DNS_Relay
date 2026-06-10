@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "../include/DNS_debug.h"
+
 /* New DNS ID = slot INDEX, O(1)
  */
 static id_entry_t id_map[ID_LIST_SIZE];

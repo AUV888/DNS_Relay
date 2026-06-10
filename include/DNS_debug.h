@@ -12,11 +12,15 @@ typedef __uint128_t uint128_t;
 #define EVENT_MASK 0xFFFF000000000000
 #define INFO_MASK 0x0000FFFFFFFFFFFF
 
+extern FILE* log_fp;
+
 int log_open(void);
 
 void log_close(void);
 
 void log_write(uint64_t payload);
+
+void log_write_bytes(const void* data, uint32_t len);
 
 enum log_event {
     LOCAL_SOCKET_FAILED = 1,
@@ -92,7 +96,9 @@ enum log_event {
     ID_MAP_SWEEP_TIMEOUT_SUCCESS = 68,
     UI8_PTR_STACK_INIT = 69,
     UI8_PTR_STACK_PUSH = 70,
-    UI8_PTR_STACK_POP = 71
+    UI8_PTR_STACK_POP = 71,
+    CACHE_FIND_SRC = 75,
+    CACHE_FIND_HASH = 76
 };
 
 typedef enum log_event log_event_t;

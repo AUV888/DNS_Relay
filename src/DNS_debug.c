@@ -7,8 +7,9 @@
 #include <unistd.h>
 
 #include "../include/DNS_arguments.h"
+#include "../include/DNS_readlog.h"
 
-static FILE* log_fp = NULL;
+FILE* log_fp = NULL;
 
 static inline uint64_t now_us(void) {
     struct timeval tv;
@@ -56,4 +57,25 @@ void log_write(uint64_t payload) {
 
     fwrite(&ts, sizeof(ts), 1, log_fp);
     fwrite(&pl, sizeof(payload), 1, log_fp);
+    if (debug_mode == 2) {
+        time_t sec = ts / 1000000;
+        struct tm* tm_info = localtime(&sec);
+        char buf[64];
+        strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tm_info);
+        printf("%s.%06llu\t", buf, ts % 1000000);
+        log_event_t l = (log_event_t)(payload >> 48);
+        readdata(l);
+    }
+}
+
+void log_write_bytes(const void* data, uint32_t len) {
+    if (debug_mode == 0 || len == 0 || data == NULL)
+        return;
+
+    if (log_fp == NULL) {
+        if (log_open() != 0)
+            return;
+    }
+
+    fwrite(data, 1, (size_t)len, log_fp);
 }

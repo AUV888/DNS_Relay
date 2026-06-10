@@ -23,26 +23,30 @@ void convert_write_bytes(uint8_t** buf, int bytes, uint32_t value);
 @brief A function to convert binary data from buffer to dns_message_t
 @param msg Output DNS message structure (MUST be allocated by caller)
 @param buf Pointer of buffer
-@param len Length of DNS message
+@param len Length of DNS message in bytes (used for bounds checking)
 */
-void dns_message_decode(dns_message_t* msg, uint8_t* buf);
+void dns_message_decode(dns_message_t* msg, uint8_t* buf, int len);
 
 /*
 @brief A utility function to get dns header
 @param msg Output DNS message structure (MUST be allocated by caller)
 @param buf Pointer of buffer
-@return New buffer pointer
+@param end One-past-end pointer of the packet buffer (for bounds checking)
+@return New buffer pointer, or NULL on truncated input
 */
-static inline uint8_t* get_dns_header(dns_message_t* msg, uint8_t* buf);
+static inline uint8_t* get_dns_header(dns_message_t* msg, uint8_t* buf,
+                                       const uint8_t* end);
 
 /*
 @brief A utility function to get dns question
 @param msg Output DNS message structure (MUST be allocated by caller)
 @param buf Pointer of buffer
 @param start The start of the whole dns message (SHOULD be given by dns_message_decode function)
-@return New buffer pointer
+@param end One-past-end pointer of the packet buffer (for bounds checking)
+@return New buffer pointer, or NULL on error
 */
-static inline uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf, uint8_t* start);
+static inline uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf,
+                                         uint8_t* start, const uint8_t* end);
 
 /*
 @brief A utility function to get dns domain where it is represented in compression
@@ -50,18 +54,22 @@ static inline uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf, uint8_
 @param idx Utility variable
 @param buf Pointer of pointer of buffer
 @param start The start of the whole dns message (SHOULD be given by dns_message_decode function)
-@return New buffer pointer
+@param end One-past-end pointer of the packet buffer (for bounds checking)
+@return New buffer pointer, or NULL on error
 */
-static inline uint8_t* get_dns_domain(char* result, int* idx, uint8_t** buf, uint8_t* start);
+static inline uint8_t* get_dns_domain(char* result, int* idx, uint8_t** buf,
+                                       uint8_t* start, const uint8_t* end);
 
 /*
 @brief A utility function to get dns answer
 @param msg Output DNS message structure (MUST be allocated by caller)
 @param buf Pointer of buffer
 @param start The start of the whole dns message (SHOULD be given by dns_message_decode function)
-@return New buffer pointer
+@param end One-past-end pointer of the packet buffer (for bounds checking)
+@return New buffer pointer, or NULL on error
 */
-static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t* start);
+static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf,
+                                       uint8_t* start, const uint8_t* end);
 
 /*
 @brief A function to convert from dns_message_t buffer to binary data in buffer

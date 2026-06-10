@@ -258,3 +258,71 @@ void parse_arguments(int argc, char* argv[]) {
         print_usage(prog);
     }
 }
+
+/* -----------------------------------------------------------------------
+ * load_cached_dns_file
+ *
+ * Reads a text file of the form:
+ *     <dotted-decimal-ip> <domain>\n
+ *
+ * and inserts every valid entry into the supplied cache.
+ * The cache pointer is typed void* so this translation unit does not
+ * need to include DNS_cache.h or DNS_server.h, keeping coupling low.
+ * The caller (main.c) casts g_cache (cache_set*) to void* when calling.
+ * ----------------------------------------------------------------------- */
+void load_cached_dns_file(void* cache) {
+    if (!cached_DNS_file || cached_file[0] == '\0' || cache == NULL)
+        return;
+
+    FILE* fp = fopen(cached_file, "r");
+    if (!fp) {
+        fprintf(stderr, "load_cached_dns_file: cannot open '%s'\n",
+                cached_file);
+        return;
+    }
+
+    /* Forward-declare only what we need from DNS_cache to stay decoupled.
+     * cache_insert signature: int cache_insert(cache_set*, char*, uint32_t, int) */
+    extern int cache_insert(void*, char*, unsigned int, int);
+
+    char line[640];   /* 255 (domain) + 1 (space) + 15 (ip) + newline + margin */
+    int loaded = 0, skipped = 0;
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        /* Strip trailing newline / carriage-return */
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
+            line[--len] = '\0';
+
+        /* Skip blank lines and comments */
+        if (len == 0 || line[0] == '#')
+            continue;
+
+        /* Parse:  <ip_str> <space(s)> <domain> */
+        char ip_str[40] = {0};
+        char domain[512] = {0};
+        if (sscanf(line, "%39s %511s", ip_str, domain) != 2) {
+            skipped++;
+            continue;
+        }
+
+        /* Convert dotted-decimal to uint32_t (host byte order) */
+        unsigned int a, b, c, d;
+        if (sscanf(ip_str, "%u.%u.%u.%u", &a, &b, &c, &d) != 4 ||
+            a > 255 || b > 255 || c > 255 || d > 255) {
+            skipped++;
+            continue;
+        }
+        unsigned int ip = (a << 24) | (b << 16) | (c << 8) | d;
+
+        /* TTL = 0 means "never expire" — use INT_MAX as a practical sentinel */
+        if (cache_insert(cache, domain, ip, 0x7fffffff))
+            loaded++;
+        else
+            skipped++;
+    }
+
+    fclose(fp);
+    fprintf(stdout, "load_cached_dns_file: loaded %d, skipped %d from '%s'\n",
+            loaded, skipped, cached_file);
+}

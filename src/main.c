@@ -10,6 +10,7 @@
 #include "../include/DNS_debug.h"
 #include "../include/DNS_server.h"
 #include "../include/DNS_struct.h"
+#include "../include/DNS_cache.h"
 
 volatile sig_atomic_t g_shutdown = 0;
 
@@ -17,6 +18,7 @@ static void sigint_handler(int sig) {
     (void)sig;
     g_shutdown = 1;
     fflush(log_fp);
+    cache_destroy(&g_cache);
 }
 
 int main(int argc, char* argv[]) {

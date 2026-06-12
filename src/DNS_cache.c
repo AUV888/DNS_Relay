@@ -18,6 +18,11 @@ uint32_t hash(const char* str) {
 
 cache_set* create_hset(void) {
     cache_set* dest = (cache_set*)malloc(sizeof(cache_set));
+    if (debug_mode) {
+        log_event_t l = dest ? CREATE_HSET_SUCCESS : CREATE_HSET_ERR;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
     return dest;
 }
 int cache_init(cache_set* s) {
@@ -25,6 +30,11 @@ int cache_init(cache_set* s) {
         return 0;
     memset(s->bucket, 0, sizeof(s->bucket));
     s->size = 0;
+    if (debug_mode) {
+        log_event_t l = CACHE_INIT;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
     return 1;
 }
 int cache_destroy(cache_set** s) {
@@ -42,6 +52,11 @@ int cache_destroy(cache_set** s) {
     (*s)->size = 0;
     free(*s);
     *s = NULL;
+    if (debug_mode) {
+        log_event_t l = CACHE_DESTROY;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
     return 1;
 }
 int cache_insert(cache_set* s, char* src, uint32_t ip, int ttl) {
@@ -82,6 +97,11 @@ int cache_insert(cache_set* s, char* src, uint32_t ip, int ttl) {
     n->next = s->bucket[h];
     s->bucket[h] = n;
     s->size++;
+    if (debug_mode) {
+        log_event_t l = CACHE_INSERT;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
     return 1;
 }
 
@@ -104,7 +124,7 @@ int cache_erase(cache_set* s, char* src) {
             free(cur);
             s->size--;
             if (debug_mode) {
-                log_event_t l = CACHE_CLEAR;
+                log_event_t l = CACHE_ERASE;
                 uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
                 log_write(pl);
             }

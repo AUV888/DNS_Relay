@@ -61,13 +61,12 @@ void convert_write_bytes(uint8_t** buf, int bytes, uint32_t value) {
     }
 }
 
-static inline uint8_t* get_dns_header(dns_message_t* msg, uint8_t* buf,
-                                       const uint8_t* end) {
+static inline uint8_t* get_dns_header(dns_message_t* msg, uint8_t* buf, const uint8_t* end) {
     /* Need exactly 12 bytes for a DNS header */
     if (buf + 12 > end)
         return NULL;
-    msg->header->id     = convert_read_bytes(&buf, 2);
-    msg->header->flags  = convert_read_bytes(&buf, 2);
+    msg->header->id = convert_read_bytes(&buf, 2);
+    msg->header->flags = convert_read_bytes(&buf, 2);
     msg->header->qdcount = convert_read_bytes(&buf, 2);
     msg->header->ancount = convert_read_bytes(&buf, 2);
     msg->header->nscount = convert_read_bytes(&buf, 2);
@@ -81,11 +80,11 @@ static inline uint8_t* get_dns_header(dns_message_t* msg, uint8_t* buf,
     return buf;
 }
 
-static inline uint8_t* get_dns_domain(char* result, int* idx, uint8_t** buf,
-                                       uint8_t* start, const uint8_t* end);
+static inline uint8_t* get_dns_domain(char* result, int* idx, uint8_t** buf, uint8_t* start,
+                                      const uint8_t* end);
 
-static inline uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf,
-                                         uint8_t* start, const uint8_t* end) {
+static inline uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf, uint8_t* start,
+                                        const uint8_t* end) {
     int qd_cnt = msg->header->qdcount, i = 0, idx = 0;
     for (i = 0; i < qd_cnt; i++) {
         char name[DNS_RR_NAME_MAX_SIZE] = {0};
@@ -120,7 +119,7 @@ static inline uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf,
         }
         memcpy(question_ptr->q_name, name, strlen(name) + 1);
 
-        question_ptr->q_type  = convert_read_bytes(&buf, 2);
+        question_ptr->q_type = convert_read_bytes(&buf, 2);
         question_ptr->q_class = convert_read_bytes(&buf, 2);
 
         question_ptr->next = msg->question;
@@ -134,8 +133,8 @@ static inline uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf,
     return buf;
 }
 
-static inline uint8_t* get_dns_domain(char* result, int* idx, uint8_t** buf,
-                                       uint8_t* start, const uint8_t* end) {
+static inline uint8_t* get_dns_domain(char* result, int* idx, uint8_t** buf, uint8_t* start,
+                                      const uint8_t* end) {
     // states
     enum parser_state { READING_DATA = 0, READING_LENGTH = 1 };
     typedef enum parser_state parser_state_t;
@@ -226,8 +225,8 @@ static inline uint8_t* get_dns_domain(char* result, int* idx, uint8_t** buf,
     }
 }
 
-static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf,
-                                       uint8_t* start, const uint8_t* end) {
+static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t* start,
+                                      const uint8_t* end) {
     for (int i = 0; i < msg->header->ancount; i++) {
         char name[DNS_RR_NAME_MAX_SIZE] = {0};
         int idx = 0;
@@ -263,9 +262,9 @@ static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf,
         }
         memcpy(rr_ptr->name, name, strlen(name) + 1);
 
-        rr_ptr->type      = convert_read_bytes(&buf, 2);
-        rr_ptr->rr_class  = convert_read_bytes(&buf, 2);
-        rr_ptr->ttl       = convert_read_bytes(&buf, 4);
+        rr_ptr->type = convert_read_bytes(&buf, 2);
+        rr_ptr->rr_class = convert_read_bytes(&buf, 2);
+        rr_ptr->ttl = convert_read_bytes(&buf, 4);
         rr_ptr->rd_length = convert_read_bytes(&buf, 2);
 
         /* Bounds check: rdata must fit inside the packet */
@@ -278,14 +277,22 @@ static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf,
         dns_type_t type = (dns_type_t)rr_ptr->type;
         switch (type) {
             case DNS_TYPE_A: {
-                if (buf + 4 > end) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (buf + 4 > end) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 for (int j = 0; j < 4; j++) {
                     rr_ptr->rd_data.a_record.ip_addr[j] = (uint8_t)convert_read_bytes(&buf, 1);
                 }
                 break;
             }
             case DNS_TYPE_AAAA: {
-                if (buf + 16 > end) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (buf + 16 > end) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 for (int j = 0; j < 16; j++) {
                     rr_ptr->rd_data.aaaa_record.ip_addr[j] = (uint8_t)convert_read_bytes(&buf, 1);
                 }
@@ -295,29 +302,47 @@ static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf,
                 char mname[DNS_RR_NAME_MAX_SIZE] = {0}, rname[DNS_RR_NAME_MAX_SIZE] = {0};
                 int m_idx = 0, r_idx = 0;
                 uint8_t* nb1 = get_dns_domain(mname, &m_idx, &buf, start, end);
-                if (nb1 == NULL) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (nb1 == NULL) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 buf = nb1;
                 uint8_t* nb2 = get_dns_domain(rname, &r_idx, &buf, start, end);
-                if (nb2 == NULL) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (nb2 == NULL) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 buf = nb2;
 
-                if (buf + 20 > end) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (buf + 20 > end) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
 
                 rr_ptr->rd_data.soa_record.mname = (char*)malloc(strlen(mname) + 1);
-                if (rr_ptr->rd_data.soa_record.mname == NULL) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (rr_ptr->rd_data.soa_record.mname == NULL) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 memcpy(rr_ptr->rd_data.soa_record.mname, mname, strlen(mname) + 1);
 
                 rr_ptr->rd_data.soa_record.rname = (char*)malloc(strlen(rname) + 1);
                 if (rr_ptr->rd_data.soa_record.rname == NULL) {
                     free(rr_ptr->rd_data.soa_record.mname);
-                    free(rr_ptr->name); free(rr_ptr); return NULL;
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
                 }
                 memcpy(rr_ptr->rd_data.soa_record.rname, rname, strlen(rname) + 1);
 
-                rr_ptr->rd_data.soa_record.serial  = convert_read_bytes(&buf, 4);
+                rr_ptr->rd_data.soa_record.serial = convert_read_bytes(&buf, 4);
                 rr_ptr->rd_data.soa_record.refresh = convert_read_bytes(&buf, 4);
-                rr_ptr->rd_data.soa_record.retry   = convert_read_bytes(&buf, 4);
-                rr_ptr->rd_data.soa_record.expire  = convert_read_bytes(&buf, 4);
+                rr_ptr->rd_data.soa_record.retry = convert_read_bytes(&buf, 4);
+                rr_ptr->rd_data.soa_record.expire = convert_read_bytes(&buf, 4);
                 rr_ptr->rd_data.soa_record.minimum = convert_read_bytes(&buf, 4);
                 break;
             }
@@ -325,29 +350,53 @@ static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf,
                 char cname[DNS_RR_NAME_MAX_SIZE] = {0};
                 int c_idx = 0;
                 uint8_t* nb = get_dns_domain(cname, &c_idx, &buf, start, end);
-                if (nb == NULL) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (nb == NULL) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 buf = nb;
                 rr_ptr->rd_data.cname_record.cname = (char*)malloc(strlen(cname) + 1);
-                if (rr_ptr->rd_data.cname_record.cname == NULL) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (rr_ptr->rd_data.cname_record.cname == NULL) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 memcpy(rr_ptr->rd_data.cname_record.cname, cname, strlen(cname) + 1);
                 break;
             }
             case DNS_TYPE_MX: {
-                if (buf + 2 > end) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (buf + 2 > end) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 rr_ptr->rd_data.mx_record.preference = (uint16_t)convert_read_bytes(&buf, 2);
                 char exchange[DNS_RR_NAME_MAX_SIZE] = {0};
                 int e_idx = 0;
                 uint8_t* nb = get_dns_domain(exchange, &e_idx, &buf, start, end);
-                if (nb == NULL) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (nb == NULL) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 buf = nb;
                 rr_ptr->rd_data.mx_record.exchange = (char*)malloc(strlen(exchange) + 1);
-                if (rr_ptr->rd_data.mx_record.exchange == NULL) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (rr_ptr->rd_data.mx_record.exchange == NULL) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 memcpy(rr_ptr->rd_data.mx_record.exchange, exchange, strlen(exchange) + 1);
                 break;
             }
             case DNS_TYPE_TXT: {
                 rr_ptr->rd_data.txt_record.text = (char*)malloc(rr_ptr->rd_length + 1);
-                if (rr_ptr->rd_data.txt_record.text == NULL) { free(rr_ptr->name); free(rr_ptr); return NULL; }
+                if (rr_ptr->rd_data.txt_record.text == NULL) {
+                    free(rr_ptr->name);
+                    free(rr_ptr);
+                    return NULL;
+                }
                 memcpy(rr_ptr->rd_data.txt_record.text, buf, rr_ptr->rd_length);
                 rr_ptr->rd_data.txt_record.text[rr_ptr->rd_length] = '\0';
                 buf += rr_ptr->rd_length;
@@ -355,7 +404,6 @@ static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf,
             }
             default: {
                 if (debug_mode) {
-                    printf("type: %d\n", rr_ptr->type);
                     log_event_t l = GET_DNS_ANSWER_NOT_SUPPORTED_TYPE_ERR;
                     uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
                     log_write(pl);
@@ -371,7 +419,7 @@ static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf,
 }
 
 void dns_message_decode(dns_message_t* msg, uint8_t* buf, int len) {
-    if (len < 12)   /* too short to hold a DNS header */
+    if (len < 12) /* too short to hold a DNS header */
         return;
 
     uint8_t* start = buf;
@@ -386,8 +434,10 @@ void dns_message_decode(dns_message_t* msg, uint8_t* buf, int len) {
         return;
 
     /* Sanity-clamp counts to avoid absurd loop iterations on garbage input */
-    if (msg->header->qdcount > 16) msg->header->qdcount = 0;
-    if (msg->header->ancount > 64) msg->header->ancount = 0;
+    if (msg->header->qdcount > 16)
+        msg->header->qdcount = 0;
+    if (msg->header->ancount > 64)
+        msg->header->ancount = 0;
 
     buf = get_dns_question(msg, buf, start, end);
     if (buf != NULL)
@@ -418,6 +468,11 @@ static inline uint8_t* set_dns_header(dns_message_t* msg, uint8_t* buf, uint8_t*
     convert_write_bytes(&buf, 2, header->nscount);
     convert_write_bytes(&buf, 2, header->arcount);
 
+    if (debug_mode) {
+        log_event_t l = SET_DNS_HEADER_SUCCESS;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
     return buf;
 }
 
@@ -443,6 +498,11 @@ static inline uint8_t* set_dns_domain(uint8_t* buf, char* name) {
         }
         i++;
     }
+    if (debug_mode) {
+        log_event_t l = SET_DNS_DOMAIN_SUCCESS;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
 }
 
 static inline uint8_t* set_dns_question(dns_message_t* msg, uint8_t* buf) {
@@ -452,6 +512,11 @@ static inline uint8_t* set_dns_question(dns_message_t* msg, uint8_t* buf) {
         convert_write_bytes(&buf, 2, q_ptr->q_type);
         convert_write_bytes(&buf, 2, q_ptr->q_class);
         q_ptr = q_ptr->next;
+    }
+    if (debug_mode) {
+        log_event_t l = SET_DNS_QUESTION_SUCCESS;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
     }
     return buf;
 }
@@ -471,6 +536,11 @@ static inline uint8_t* set_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t*
 
         ans_ptr = ans_ptr->next;
     }
+    if (debug_mode) {
+        log_event_t l = SET_DNS_ANSWER_SUCCESS;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
     return buf;
 }
 
@@ -478,6 +548,11 @@ uint8_t* dns_message_encode(dns_message_t* msg, uint8_t* buf, uint8_t* ip_addr) 
     buf = set_dns_header(msg, buf, ip_addr);
     buf = set_dns_question(msg, buf);
     buf = set_dns_answer(msg, buf, ip_addr);
+    if (debug_mode) {
+        log_event_t l = DNS_MESSAGE_ENCODE_SUCCESS;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
     return buf;
 }
 
@@ -507,19 +582,24 @@ void dns_message_free(dns_message_t* msg) {
             dns_type_t type = (dns_type_t)a->type;
             switch (type) {
                 case DNS_TYPE_SOA:
-                    if (a->rd_data.soa_record.mname) free(a->rd_data.soa_record.mname);
-                    if (a->rd_data.soa_record.rname)  free(a->rd_data.soa_record.rname);
+                    if (a->rd_data.soa_record.mname)
+                        free(a->rd_data.soa_record.mname);
+                    if (a->rd_data.soa_record.rname)
+                        free(a->rd_data.soa_record.rname);
                     break;
                 case DNS_TYPE_CNAME: {
-                    if (a->rd_data.cname_record.cname) free(a->rd_data.cname_record.cname);
+                    if (a->rd_data.cname_record.cname)
+                        free(a->rd_data.cname_record.cname);
                     break;
                 }
                 case DNS_TYPE_MX: {
-                    if (a->rd_data.mx_record.exchange) free(a->rd_data.mx_record.exchange);
+                    if (a->rd_data.mx_record.exchange)
+                        free(a->rd_data.mx_record.exchange);
                     break;
                 }
                 case DNS_TYPE_TXT: {
-                    if (a->rd_data.txt_record.text) free(a->rd_data.txt_record.text);
+                    if (a->rd_data.txt_record.text)
+                        free(a->rd_data.txt_record.text);
                     break;
                 }
                 default:
@@ -531,6 +611,11 @@ void dns_message_free(dns_message_t* msg) {
         a = nx;
     }
     msg->answer = NULL;
+    if (debug_mode) {
+        log_event_t l = DNS_MESSAGE_FREE_SUCCESS;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
 }
 
 /* -----------------------------------------------------------------------
@@ -547,13 +632,10 @@ void dns_message_free(dns_message_t* msg) {
  * to-pointer; instead it takes the current read position as `pos` and
  * returns the new position via the return value.
  */
-static const uint8_t* fast_decode_name(const uint8_t* pos,
-                                        const uint8_t* pkt_start,
-                                        const uint8_t* pkt_end,
-                                        char* result,
-                                        int*  result_len) {
-    int   idx      = 0;
-    int   jmp_cnt  = 0;
+static const uint8_t* fast_decode_name(const uint8_t* pos, const uint8_t* pkt_start,
+                                       const uint8_t* pkt_end, char* result, int* result_len) {
+    int idx = 0;
+    int jmp_cnt = 0;
     /* When we follow a compression pointer we need to continue from the
      * original stream position after the 2-byte pointer.  saved_pos is
      * set to that continuation address; once we reach end-of-name we
@@ -574,9 +656,9 @@ static const uint8_t* fast_decode_name(const uint8_t* pos,
                 return NULL;
             uint16_t offset = (uint16_t)(((b & 0x3F) << 8) | pos[1]);
             if (pkt_start + offset >= pos)
-                return NULL;  /* forward / self reference */
+                return NULL; /* forward / self reference */
             if (saved_pos == NULL)
-                saved_pos = pos + 2;  /* remember where to resume */
+                saved_pos = pos + 2; /* remember where to resume */
             pos = pkt_start + offset;
             continue;
         }
@@ -601,8 +683,8 @@ static const uint8_t* fast_decode_name(const uint8_t* pos,
         if (idx + label_len >= DNS_RR_NAME_MAX_SIZE)
             return NULL;
         memcpy(result + idx, pos, label_len);
-        idx  += label_len;
-        pos  += label_len;
+        idx += label_len;
+        pos += label_len;
     }
 }
 
@@ -610,11 +692,11 @@ int dns_query_decode_fast(const uint8_t* buf, int len, dns_query_fast_t* out) {
     if (!buf || len < 12 || !out)
         return 0;
 
-    const uint8_t* p   = buf;
+    const uint8_t* p = buf;
     const uint8_t* end = buf + len;
 
     /* Header (12 bytes) */
-    out->id    = (uint16_t)((p[0] << 8) | p[1]);
+    out->id = (uint16_t)((p[0] << 8) | p[1]);
     out->flags = (uint16_t)((p[2] << 8) | p[3]);
     uint16_t qdcount = (uint16_t)((p[4] << 8) | p[5]);
     p += 12;
@@ -625,8 +707,7 @@ int dns_query_decode_fast(const uint8_t* buf, int len, dns_query_fast_t* out) {
     /* Question section */
     out->q_wire_start = p;
     int name_len = 0;
-    const uint8_t* after_name = fast_decode_name(p, buf, end,
-                                                  out->q_name, &name_len);
+    const uint8_t* after_name = fast_decode_name(p, buf, end, out->q_name, &name_len);
     if (after_name == NULL)
         return 0;
 
@@ -634,14 +715,14 @@ int dns_query_decode_fast(const uint8_t* buf, int len, dns_query_fast_t* out) {
     if (after_name + 4 > end)
         return 0;
 
-    out->q_type  = (uint16_t)((after_name[0] << 8) | after_name[1]);
+    out->q_type = (uint16_t)((after_name[0] << 8) | after_name[1]);
     out->q_class = (uint16_t)((after_name[2] << 8) | after_name[3]);
     out->q_wire_len = (int)((after_name + 4) - p);
     return 1;
 }
 
-int dns_reply_encode_fast(const dns_query_fast_t* q, const uint8_t ip_addr[4],
-                           int nxdomain, uint8_t* dst) {
+int dns_reply_encode_fast(const dns_query_fast_t* q, const uint8_t ip_addr[4], int nxdomain,
+                          uint8_t* dst) {
     if (!q || !ip_addr || !dst)
         return -1;
 
@@ -660,12 +741,16 @@ int dns_reply_encode_fast(const dns_query_fast_t* q, const uint8_t ip_addr[4],
     p[2] = (uint8_t)(flags >> 8);
     p[3] = (uint8_t)(flags & 0xFF);
     /* QDCOUNT = 1 */
-    p[4] = 0; p[5] = 1;
+    p[4] = 0;
+    p[5] = 1;
     /* ANCOUNT = 0 (NXDOMAIN) or 1 */
-    p[6] = 0; p[7] = (uint8_t)(nxdomain ? 0 : 1);
+    p[6] = 0;
+    p[7] = (uint8_t)(nxdomain ? 0 : 1);
     /* NSCOUNT = 0, ARCOUNT = 0 */
-    p[8] = 0; p[9] = 0;
-    p[10] = 0; p[11] = 0;
+    p[8] = 0;
+    p[9] = 0;
+    p[10] = 0;
+    p[11] = 0;
     p += 12;
 
     /* ---- Question section: copy raw wire bytes ---- */
@@ -683,16 +768,28 @@ int dns_reply_encode_fast(const dns_query_fast_t* q, const uint8_t ip_addr[4],
     p[1] = 0x0C;
     p += 2;
     /* TYPE A */
-    p[0] = 0; p[1] = 1;   p += 2;
+    p[0] = 0;
+    p[1] = 1;
+    p += 2;
     /* CLASS IN */
-    p[0] = 0; p[1] = 1;   p += 2;
+    p[0] = 0;
+    p[1] = 1;
+    p += 2;
     /* TTL = 300 */
-    p[0] = 0; p[1] = 0; p[2] = 0x01; p[3] = 0x2C;  p += 4;
+    p[0] = 0;
+    p[1] = 0;
+    p[2] = 0x01;
+    p[3] = 0x2C;
+    p += 4;
     /* RDLENGTH = 4 */
-    p[0] = 0; p[1] = 4;   p += 2;
+    p[0] = 0;
+    p[1] = 4;
+    p += 2;
     /* RDATA: IPv4 address */
-    p[0] = ip_addr[0]; p[1] = ip_addr[1];
-    p[2] = ip_addr[2]; p[3] = ip_addr[3];
+    p[0] = ip_addr[0];
+    p[1] = ip_addr[1];
+    p[2] = ip_addr[2];
+    p[3] = ip_addr[3];
     p += 4;
 
     return (int)(p - dst);

@@ -13,12 +13,23 @@ static int next_slot = 0;
 void id_map_init(void) {
     memset(id_map, 0, sizeof(id_map));
     next_slot = 0;
+    if (debug_mode) {
+        log_event_t l = ID_MAP_INIT;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
 }
 
 int id_map_insert(uint16_t original_id, const struct sockaddr_in* client_addr,
                   uint16_t* new_id_output) {
-    if (client_addr == NULL || new_id_output == NULL)
+    if (client_addr == NULL || new_id_output == NULL) {
+        if (debug_mode) {
+            log_event_t l = ID_MAP_INSERT_ARGS_NULL_PTR_ERR;
+            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            log_write(pl);
+        }
         return 0;
+    }
 
     for (int i = 0; i < ID_LIST_SIZE; i++) {
         int idx = (next_slot + i) % ID_LIST_SIZE;
@@ -42,31 +53,76 @@ int id_map_insert(uint16_t original_id, const struct sockaddr_in* client_addr,
         }
     }
     // table full and nothing has expired
+    if (debug_mode) {
+        log_event_t l = ID_MAP_FIND_TIMEOUT_ERR;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
     return 0;
 }
 
 int id_map_find(uint16_t new_id, uint16_t* original_id_out, struct sockaddr_in* client_addr_out) {
-    if (new_id >= ID_LIST_SIZE)
+    if (new_id >= ID_LIST_SIZE) {
+        if (debug_mode) {
+            log_event_t l = ID_MAP_FIND_ID_OUT_BOUND_ERR;
+            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            log_write(pl);
+        }
         return 0;
-    if (!id_map[new_id].used)
+    }
+    if (!id_map[new_id].used) {
+        if (debug_mode) {
+            log_event_t l = ID_MAP_FIND_USED_ID_ERR;
+            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            log_write(pl);
+        }
         return 0;
-    if (time(NULL) - id_map[new_id].send_time > ID_MAP_TIMEOUT)
+    }
+    if (time(NULL) - id_map[new_id].send_time > ID_MAP_TIMEOUT) {
+        if (debug_mode) {
+            log_event_t l = ID_MAP_FIND_TIMEOUT_ERR;
+            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            log_write(pl);
+        }
         return 0;
+    }
 
     if (original_id_out)
         *original_id_out = id_map[new_id].original_id;
     if (client_addr_out)
         *client_addr_out = id_map[new_id].client_addr;
+    if (debug_mode) {
+        log_event_t l = ID_MAP_FIND_SUCCESS;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
     return 1;
 }
 
 int id_map_erase(uint16_t new_id) {
-    if (new_id >= ID_LIST_SIZE)
+    if (new_id >= ID_LIST_SIZE) {
+        if (debug_mode) {
+            log_event_t l = ID_MAP_ERASE_ID_OUT_BOUND_ERR;
+            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            log_write(pl);
+        }
         return 0;
-    if (!id_map[new_id].used)
+    }
+    if (!id_map[new_id].used) {
+        if (debug_mode) {
+            log_event_t l = ID_MAP_ERASE_ID_MAP_USED_ERR;
+            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            log_write(pl);
+        }
         return 0;
+    }
 
     id_map[new_id].used = 0;
+    if (debug_mode) {
+        log_event_t l = ID_MAP_ERASED_SUCCESS;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
+    }
     return 1;
 }
 
@@ -78,6 +134,11 @@ int id_map_sweep_timeout(void) {
             id_map[i].used = 0;
             released++;
         }
+    }
+    if (debug_mode) {
+        log_event_t l = ID_MAP_SWEEP_TIMEOUT_SUCCESS;
+        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        log_write(pl);
     }
     return released;
 }

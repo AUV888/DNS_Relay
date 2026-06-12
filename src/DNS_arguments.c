@@ -21,6 +21,9 @@ char blocking_mode = 1;
 static void print_usage(const char* prog) {
     fprintf(stderr,
             "Usage: %s -s <server_ip> [options]\n"
+            "\033[31m\033[1mNEVER SET UPSTREAM DNS SERVER ADDRESS AS LOOPBACK (127.0.0.0/8)! STORM WILL HAPPEN!\n\033[0m"
+            "\033[33mNote: This program can reach its limit at approximately 10,000 QPS.\n"
+            "Please use \033[1mUSE IT PROPERLY \033[0m\033[33mif your organization has DNS traffic restrictions.\n\033[0m"
             "\n"
             "Required:\n"
             "  -s, --server       <ipv4>     upstream DNS server address (dotted decimal)\n"
@@ -255,6 +258,9 @@ void parse_arguments(int argc, char* argv[]) {
 
     if (dns_server_addr == NULL) {
         fprintf(stderr, "Error: -s/--server <ipv4> is required.\n");
+        print_usage(prog);
+    } else if (dns_server_addr[0] == '1' && dns_server_addr[1] == '2' && dns_server_addr[2] == '7') {
+        fprintf(stderr, "\033[31m\033[1mFATAL: STORM WILL HAPPEN IF UPSTREAM IPV4 IS LOOPBACK!\n\033[0m");
         print_usage(prog);
     }
 }

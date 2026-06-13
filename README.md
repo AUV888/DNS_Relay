@@ -7,7 +7,7 @@ A DNS relay server implemented in C language, supporting DNS caching, request fo
 ## ✨ Features
 
 - ✅ **DNS Protocol Parsing** - Full support for DNS message format
-- ✅ **Lazy & Periodic Clenaup Cache Mechanism** - Efficient caching of DNS query results
+- ✅ **Lazy & Periodic Cleanup Cache Mechanism** - Efficient caching of DNS query results
 - ✅ **Concurrent Processing** - Support for multiple simultaneous clients
 - ✅ **Configuration Support** - Runtime configuration updates
 
@@ -72,15 +72,15 @@ All options follow GNU style: short (`-d`), long (`--debug`), and single-dash
 long forms (`--d`) are all accepted; short flags can be combined (e.g. `-dn`)
 as long as flags requiring an argument appear last.
 
-| Argument         | Short | Argument        | Default       | Description                                                                              |
-| ---------------- | ----- | --------------- | ------------- | ---------------------------------------------------------------------------------------- |
-| `--server`       | `-s`  | `<ipv4>`        | *(required)*  | Upstream DNS server address in dotted-decimal form. Program exits with usage if missing. |
-| `--debug`        | `-d`  | `[log_file]`    | off           | Enable debug logging. If `log_file` is omitted, an auto-named file is used.              |
-| `--moredebug`    | `-m`  | `[log_file]`    | off           | More verbose debug logging; otherwise the same as `--debug`.                             |
-| `--cached`       | `-c`  | `<file>`        | none          | Load pre-cached DNS records from `<file>` at startup.                                    |
-| `--nonblocking`  | `-n`  | *(none)*        | blocking      | Switch the event loop to non-blocking I/O. Without this flag, blocking mode is used.     |
-| `--listenport`   | `-l`  | `<1-65535>`     | `53`          | Local UDP port to listen on for client DNS queries.                                      |
-| `--upstreamport` | `-u`  | `<1-65535>`     | `53`          | Destination UDP port when forwarding queries to the upstream server.                     |
+| Argument           | Short  | Argument       | Default        | Description                                                                              |
+| ------------------ | ------ | -------------- | -------------- | ---------------------------------------------------------------------------------------- |
+| `--server`       | `-s` | `<ipv4>`     | *(required)* | Upstream DNS server address in dotted-decimal form. Program exits with usage if missing. |
+| `--debug`        | `-d` | `[log_file]` | off            | Enable debug logging. If `log_file` is omitted, an auto-named file is used.            |
+| `--moredebug`    | `-m` | `[log_file]` | off            | More verbose debug logging; otherwise the same as `--debug`.                           |
+| `--cached`       | `-c` | `<file>`     | none           | Load pre-cached DNS records from `<file>` at startup.                                  |
+| `--nonblocking`  | `-n` | *(none)*     | blocking       | Switch the event loop to non-blocking I/O. Without this flag, blocking mode is used.     |
+| `--listenport`   | `-l` | `<1-65535>`  | `53`         | Local UDP port to listen on for client DNS queries.                                      |
+| `--upstreamport` | `-u` | `<1-65535>`  | `53`         | Destination UDP port when forwarding queries to the upstream server.                     |
 
 ### Examples
 
@@ -121,6 +121,7 @@ DNS_Relay/
 │   ├── DNS_debug.c            #   128-bit binary log file writer
 │   ├── DNS_id.c               #   ID-mapping bookkeeping
 │   ├── DNS_server.c           #   recvfrom / sendto event loop
+│   ├── DNS_readlog.c          #   print debug info for moredebug mode
 │   └── DNS_util.c             #   helper utilities
 ├── logs/                      # Default location for binary log files (manual mkdir)
 ├── Makefile                   # Build configuration (gcc -Wall -g -O0)
@@ -135,7 +136,8 @@ DNS_Relay/
 ### Basic Testing
 
 ```bash
-# To be completed
+sudo ./DNS_Relay -s 8.8.8.8 -c cached_A_records.txt -l 5353 -d ./testing.log
+dnsperf 127.0.0.1 -d formatted_domain.txt -Q 50000 -q 50000 -p 5353 -l 60
 ```
 
 ## 🔧 Build Options
@@ -148,35 +150,18 @@ make
 make clean
 ```
 
-## 📝 Configuration Example
-
-```ini
-# To be completed
-```
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Q: "bin directory does not exist" during build**
-
-```bash
-mkdir -p bin
-make
-```
 
 ## 📈 Performance Metrics
 
-| Metric         | Expected | Description                     |
-| -------------- | -------- | ------------------------------- |
-| Cache hit rate | --       | Efficiency for repeated queries |
-| Response time  | --       | Average query latency           |
-| Memory usage   | --       | Runtime memory consumption      |
+| Metric                  | Expected       | Description                                                                                                                                                                      |
+| ----------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Zero Cache Avg. Latency | 0.393s         | Average query latency<br />Average RTT from Beijing to 8.8.8.8 is 250~350ms                                                                                                      |
+| Full Cache Avg. Latency | 0.075s         | Average query latency<br />Under high concurrency stress test (50,000 queries)                                                                                                   |
+| Zero Cache QPS          | approx. 9,200  | Query per second without any cached DNS.<br />Tested on a MacBook Pro (M4 Pro) at Wednesday afternoon in Beijing residential area.<br />Upstream server is 8.8.8.8 (Google DNS). |
+| Full Cache QPS          | approx. 33,200 | Query per second when A record is fully cached.<br />Tested on a WSL, 8-core-laptop at Friday night in Beijing residential area.<br />Upstream server is 8.8.8.8 (Google DNS).   |
 
 ## 👥 Development Team
 
 | Name   | Student ID | Responsibilities |
 | ------ | ---------- | ---------------- |
-| AUV888 | --         | --               |
-| --     | --         | --               |
-| --     | --         | --               |
+| AUV888 | --         | All              |

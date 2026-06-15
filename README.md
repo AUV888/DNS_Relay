@@ -6,6 +6,7 @@ A DNS relay server implemented in C language, supporting DNS caching, request fo
 
 ## ✨ Features
 
+- ✅ **High Performance** - 0 Cache: **9218** QPS, Full Cache: **33218** QPS
 - ✅ **DNS Protocol Parsing** - Full support for DNS message format
 - ✅ **Lazy & Periodic Cleanup Cache Mechanism** - Efficient caching of DNS query results
 - ✅ **Concurrent Processing** - Support for multiple simultaneous clients

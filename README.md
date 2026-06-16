@@ -4,9 +4,11 @@
 
 A DNS relay server implemented in C language, supporting DNS caching, request forwarding, and real-time monitoring. This project is the course design assignment for "Computer Network", running on Linux environment.
 
+To reproduce the figures, please refer to [./artifact_evaluation/AE_README.md](./artifact_evaluation/AE_README.md).
+
 ## ✨ Features
 
-- ✅ **High Performance** - 0 Cache: **9218** QPS, Full Cache: **33218** QPS
+- ✅ **High Performance** - 0 Cache: **9218** QPS, Mixed Cache: **33218** QPS
 - ✅ **DNS Protocol Parsing** - Full support for DNS message format
 - ✅ **Lazy & Periodic Cleanup Cache Mechanism** - Efficient caching of DNS query results
 - ✅ **Concurrent Processing** - Support for multiple simultaneous clients
@@ -151,15 +153,14 @@ make
 make clean
 ```
 
-
 ## 📈 Performance Metrics
 
-| Metric                  | Expected       | Description                                                                                                                                                                      |
-| ----------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Zero Cache Avg. Latency | 0.393s         | Average query latency<br />Average RTT from Beijing to 8.8.8.8 is 250~350ms                                                                                                      |
-| Full Cache Avg. Latency | 0.075s         | Average query latency<br />Under high concurrency stress test (50,000 queries)                                                                                                   |
-| Zero Cache QPS          | approx. 9,200  | Query per second without any cached DNS.<br />Tested on a MacBook Pro (M4 Pro) at Wednesday afternoon in Beijing residential area.<br />Upstream server is 8.8.8.8 (Google DNS). |
-| Full Cache QPS          | approx. 33,200 | Query per second when A record is fully cached.<br />Tested on a WSL, 8-core-laptop at Friday night in Beijing residential area.<br />Upstream server is 8.8.8.8 (Google DNS).   |
+| Metric                                            | Expected       | Description                                                                                                                                                                      |
+| ------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Zero Cache Avg. Latency                           | 0.393s         | Average query latency<br />Average RTT from Beijing to 8.8.8.8 is 250~350ms                                                                                                      |
+| Mixed Cache Avg. Latency<br />(Approx. 23% cache) | 0.075s         | Average query latency<br />Under high concurrency stress test (50,000 queries)                                                                                                   |
+| Zero Cache QPS                                    | approx. 9,200  | Query per second without any cached DNS.<br />Tested on a MacBook Pro (M4 Pro) at Wednesday afternoon in Beijing residential area.<br />Upstream server is 8.8.8.8 (Google DNS). |
+| Mixed Cache QPS<br />(Approx. 23% cache)          | approx. 33,200 | Query per second when A record is fully cached.<br />Tested on a WSL, 8-core-laptop at Friday night in Beijing residential area.<br />Upstream server is 8.8.8.8 (Google DNS).   |
 
 ## 👥 Development Team
 

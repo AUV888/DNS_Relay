@@ -9,7 +9,7 @@ Please make sure that you are in the root directory of the repository and run
 
 ```bash
 make clean && make
-sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8 -c ../artifact_evaluation/cached_domain.txt
+sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/cached_domain.txt
 ```
 
 If you want to test more arguments, please refer to the argument lists below.

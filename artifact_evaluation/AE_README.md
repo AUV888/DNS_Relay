@@ -9,7 +9,7 @@ Please make sure that you are in the root directory of the repository and run
 
 ```bash
 make clean && make
-sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/cached_domain.txt
+sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8 -c ../artifact_evaluation/cached_domain.txt
 ```
 
 If you want to test more arguments, please refer to the argument lists below.
@@ -80,7 +80,7 @@ sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8
 
 ```bash
 #Terminal 2
-dnsperf 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60 | tee ./artifact_evaluation/No_Cache.log
+dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60 | tee ./artifact_evaluation/No_Cache.log
 ```
 
 If your network is fast enough or your organization does not have high-frequency UDP packets speed limits, you'll probably see the log like this:
@@ -89,7 +89,7 @@ If your network is fast enough or your organization does not have high-frequency
 DNS Performance Testing Tool
 Version 2.15.0
 
-[Status] Command line: dnsperf 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60
+[Status] Command line: dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60
 [Status] Sending queries (to 127.0.0.1:5678)
 [Status] Started at: Wed Jun 10 16:16:03 2026
 [Status] Stopping after 60.000000 seconds
@@ -117,16 +117,16 @@ The QPS will fluctuate due to your network status, but it will be at least 1k QP
 
 Considering that many DNS packet have a TTL for 5 minutes and we cache almost every DNS type A request that was received from upstream server, we suggest you **perform this right after performing operations in section 2**. If you haven't do this in 5 minutes, please kill this program and perform section 2 again to cache them.
 
-Please make sure that you are in the root directory of the repository and you've compiled the binary file before. You can run commands below
+Please make sure that you are in the root directory of the repository and you've compiled the binary file before. You can run commands below.
 
 ```bash
 #Terminal 1
-sudo ./bin/DNS_Relay -l 6789 -s 8.8.8.8
+sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8
 ```
 
 ```bash
 #Terminal 2
-dnsperf 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 6789 -l 60 | tee ./artifact_evaluation/Mixed_Cache.log
+dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60 | tee ./artifact_evaluation/Mixed_Cache.log
 ```
 
 You'll probably see log like this:
@@ -135,8 +135,8 @@ You'll probably see log like this:
 DNS Performance Testing Tool
 Version 2.14.0
 
-[Status] Command line: dnsperf 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 6789 -l 60
-[Status] Sending queries (to 127.0.0.1:6789)
+[Status] Command line: dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60
+[Status] Sending queries (to 127.0.0.1:5678)
 [Status] Started at: Fri Jun 12 21:02:10 2026
 [Status] Stopping after 60.000000 seconds
 [Status] Testing complete (time limit)
@@ -156,7 +156,7 @@ Statistics:
   Latency StdDev (s):   0.254015
 ```
 
-Note that the total queries sent in Section 3 (2.48 million) exceed the number of cached records populated in Section 2 (~0.56 million). Therefore, this test represents a mixed workload: approximately 23% of queries hit the cache, while the remaining 60% are forwarded to the upstream server. This mixed scenario actually reflects real-world deployment more accurately than a pure cache-hit test. The QPS improvement from ~9k to ~33k demonstrates the effectiveness of our caching mechanism even under partial cache miss conditions.
+Note that the total queries sent in Section 3 (2.48 million) exceed the number of cached records populated in Section 2 (~0.56 million). Therefore, this test represents a mixed workload: a small percentage of queries hit the cache, while the remaining are forwarded to the upstream server. This mixed scenario actually reflects real-world deployment more accurately than a pure cache-hit test. The QPS improvement from ~9k to ~33k demonstrates the effectiveness of our caching mechanism even under partial cache miss conditions.
 
 ## 4. Devices
 

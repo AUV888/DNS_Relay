@@ -158,8 +158,55 @@ Statistics:
 
 Note that the total queries sent in Section 3 (2.48 million) exceed the number of cached records populated in Section 2 (~0.56 million). Therefore, this test represents a mixed workload: a small percentage of queries hit the cache, while the remaining are forwarded to the upstream server. This mixed scenario actually reflects real-world deployment more accurately than a pure cache-hit test. The QPS improvement from ~9k to ~33k demonstrates the effectiveness of our caching mechanism even under partial cache miss conditions.
 
-## 4. Devices
+## 4. Full Cache QPS
+
+To help you better test the performance of our program, we made up a cache file with 1 million domains with fake but legal dotted decimal IPv4 addresses, as shown in `./artifact_evaluation/full_cache.txt`. Note that the domains in `./artifact_evaluation/full_cache.txt` are exactly the same as the domains in `./artifact_evaluation/A_request.txt`.
+
+We used Wireshark to capture the DNS requests sent from our machine to 8.8.8.8, but nothing could be captured, which means that nothing has been forwarded to upstream server.
+
+Please make sure that you are in the root directory of the repository and you've compiled the binary file before. You can run commands below to test full cache performance.
+
+```bash
+#Terminal 1
+sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/full_cache.txt
+```
+
+```bash
+#Terminal 2
+dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 500000 -q 65500 -p 5678 | tee ./artifact_evaluation/Full_Cache.log
+```
+
+You'll probably see log like this:
+
+```plaintext
+DNS Performance Testing Tool
+Version 2.14.0
+
+[Status] Command line: dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 500000 -q 65500 -p 5678
+[Status] Sending queries (to 127.0.0.1:5678)
+[Status] Started at: Wed Jun 17 14:43:06 2026
+[Status] Stopping after 1 run through file
+[Status] Testing complete (end of file)
+
+Statistics:
+
+  Queries sent:         1000000
+  Queries completed:    934680 (93.47%)
+  Queries lost:         65320 (6.53%)
+
+  Response codes:       NOERROR 934680 (100.00%)
+  Average packet size:  request 32, response 48
+  Run time (s):         7.034568
+  Queries per second:   132869.566404
+
+  Average Latency (s):  0.000723 (min 0.000012, max 0.001686)
+  Latency StdDev (s):   0.000203
+```
+
+132,869 QPS is a very good performance. It is possible that your QPS is not as high as we measured, since it may fluctuate from 110,000 QPS to 140,000 QPS. You can try several times to find the best result.
+
+## 5. Devices
 
 Zero cache results were tested on a MacBook Pro (M4 Pro chip).
 
-Mixed cache results were tested on a WSL laptop (AMD Ryzen R7-8845H chip).
+Mixed cache and full cache results were tested on a WSL laptop (AMD Ryzen R7-8845H chip).

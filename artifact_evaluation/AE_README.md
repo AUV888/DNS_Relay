@@ -80,7 +80,7 @@ sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8
 
 ```bash
 #Terminal 2
-dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60 | tee ./artifact_evaluation/No_Cache.log
+dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_request.txt -Q 50000 -q 50000 -p 5678 -l 60 | tee ./artifact_evaluation/No_Cache.log
 ```
 
 If your network is fast enough or your organization does not have high-frequency UDP packets speed limits, you'll probably see the log like this:
@@ -89,7 +89,7 @@ If your network is fast enough or your organization does not have high-frequency
 DNS Performance Testing Tool
 Version 2.15.0
 
-[Status] Command line: dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60
+[Status] Command line: dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_request.txt -Q 50000 -q 50000 -p 5678 -l 60
 [Status] Sending queries (to 127.0.0.1:5678)
 [Status] Started at: Wed Jun 10 16:16:03 2026
 [Status] Stopping after 60.000000 seconds
@@ -126,7 +126,7 @@ sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8
 
 ```bash
 #Terminal 2
-dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60 | tee ./artifact_evaluation/Mixed_Cache.log
+dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_request.txt -Q 50000 -q 50000 -p 5678 -l 60 | tee ./artifact_evaluation/Mixed_Cache.log
 ```
 
 You'll probably see log like this:
@@ -135,7 +135,7 @@ You'll probably see log like this:
 DNS Performance Testing Tool
 Version 2.14.0
 
-[Status] Command line: dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60
+[Status] Command line: dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_request.txt -Q 50000 -q 50000 -p 5678 -l 60
 [Status] Sending queries (to 127.0.0.1:5678)
 [Status] Started at: Fri Jun 12 21:02:10 2026
 [Status] Stopping after 60.000000 seconds
@@ -173,7 +173,7 @@ sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/full_cache.txt
 
 ```bash
 #Terminal 2
-dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 500000 -q 65500 -p 5678 | tee ./artifact_evaluation/Full_Cache.log
+dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_request.txt -Q 500000 -q 65500 -p 5678 | tee ./artifact_evaluation/Full_Cache.log
 ```
 
 You'll probably see log like this:
@@ -182,7 +182,7 @@ You'll probably see log like this:
 DNS Performance Testing Tool
 Version 2.14.0
 
-[Status] Command line: dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 500000 -q 65500 -p 5678
+[Status] Command line: dnsperf -s 127.0.0.1 -d ./artifact_evaluation/A_request.txt -Q 500000 -q 65500 -p 5678
 [Status] Sending queries (to 127.0.0.1:5678)
 [Status] Started at: Wed Jun 17 14:43:06 2026
 [Status] Stopping after 1 run through file

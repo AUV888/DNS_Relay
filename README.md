@@ -2,7 +2,9 @@
 
 ## 📖 Project Overview
 
-A DNS relay server implemented in C language, supporting DNS caching, request forwarding, and real-time monitoring. This project is the course design assignment for "Computer Network", running on Linux environment.
+A DNS relay server implemented in C language, supporting DNS caching, request forwarding, and real-time monitoring. This project is the course design assignment for "Computer Network" from BUPT, running on Linux environment.
+
+**This project received a score of 99 out of 100 in the course design of 1.5 credits.**
 
 To reproduce the figures, please refer to [./artifact_evaluation/AE_README.md](./artifact_evaluation/AE_README.md).
 

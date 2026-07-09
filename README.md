@@ -1,4 +1,4 @@
-# 🚀 DNS Relay - Computer Network Course Design
+# 🚀 DNS Relay - Curriculum Practice of Computer Networks
 
 ## 📖 Project Overview
 

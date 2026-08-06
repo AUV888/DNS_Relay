@@ -2,7 +2,7 @@
 
 #include "../include/DNS_debug.h"
 
-void readdata(log_event_t l) {
+void read_data(log_event_t l) {
     switch (l) {
         case LOCAL_SOCKET_FAILED: {
             printf("LOCAL_SOCKET_FAILED\n");
@@ -306,6 +306,10 @@ void readdata(log_event_t l) {
         }
         case CACHE_FIND_HASH: {
             printf("CACHE_FIND_HASH\n");
+            break;
+        }
+        case GET_DNS_ANSWER_SUCCESS: {
+            printf("GET_DNS_ANSWER_SUCCESS\n");
             break;
         }
         default:

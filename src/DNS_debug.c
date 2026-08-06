@@ -64,7 +64,7 @@ void log_write(uint64_t payload) {
         strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tm_info);
         printf("%s.%06llu\t", buf, ts % 1000000);
         log_event_t l = (log_event_t)(payload >> 48);
-        readdata(l);
+        read_data(l);
     }
 }
 

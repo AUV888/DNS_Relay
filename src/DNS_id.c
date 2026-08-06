@@ -109,9 +109,13 @@ int id_map_erase(uint16_t new_id) {
         return 0;
     }
     if (!id_map[new_id].used) {
+        // Cannot erase a slot that is not in use
         if (debug_mode) {
+            /* The log would be
+             * [Timestamp : 8B][ID_MAP_ERASE_ID_MAP_USED_ERR : 2B][NULL : 4B][new_id : 2B]
+             */
             log_event_t l = ID_MAP_ERASE_ID_MAP_USED_ERR;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)new_id);
             log_write(pl);
         }
         return 0;
@@ -119,8 +123,11 @@ int id_map_erase(uint16_t new_id) {
 
     id_map[new_id].used = 0;
     if (debug_mode) {
+        /* The log would be
+         * [Timestamp : 8B][ID_MAP_ERASED_SUCCESS : 2B][NULL : 4B][new_id : 2B]
+         */
         log_event_t l = ID_MAP_ERASED_SUCCESS;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)new_id);
         log_write(pl);
     }
     return 1;
@@ -135,9 +142,12 @@ int id_map_sweep_timeout(void) {
             released++;
         }
     }
-    if (debug_mode) {
+    if (debug_mode && timeout_cnt >= 30) {
+        /* The log would be
+         * [Timestamp : 8B][ID_MAP_SWEEP_TIMEOUT_SUCCESS : 2B][NULL : 2B][release : 4B]
+         */
         log_event_t l = ID_MAP_SWEEP_TIMEOUT_SUCCESS;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)released);
         log_write(pl);
     }
     return released;

@@ -27,4 +27,11 @@ int cache_erase(cache_set* s, char* src);
 int cache_clear(cache_set* s);
 int cache_find(cache_set* s, char* src, uint32_t* ip_addr_output);
 unsigned long cache_size(cache_set* s);
+
+/* When non-zero, cache_insert() will skip writing the CACHE_INSERT log
+ * record.  Set this around bulk-load paths (e.g. load_cached_dns_file)
+ * so that loading a file with ~1M entries does not produce ~1M log
+ * lines.  Restore the previous value afterwards so that runtime
+ * cache_insert() calls (from cache_answers_from_msg) still log. */
+extern int cache_insert_logging_suppressed;
 #endif

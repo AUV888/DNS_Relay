@@ -15,7 +15,8 @@
 /* Helper: set a file descriptor to non-blocking mode. */
 static int set_nonblocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0) return -1;
+    if (flags < 0)
+        return -1;
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
@@ -34,6 +35,7 @@ struct sockaddr_in local_addr;
 struct sockaddr_in remote_addr;
 
 cache_set* g_cache;
+char timeout_cnt = 0;
 
 void server_socket_init() {
     log_event_t l;
@@ -168,11 +170,17 @@ void server_mode_blocking_set() {
         }
 
         if (n == 0) {
-            // Timeout: run periodic housekeeping, then go back to sleep
+            // Timeout: run periodic housekeeping, then go back to sleep.
+            // Log throttle: only write a BLOCK_MODE_TIMEOUT record every
+            // 30 timeouts (30s) to avoid flooding the log.
+            timeout_cnt++;
             if (debug_mode) {
-                l = BLOCK_MODE_TIMEOUT;
-                uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-                log_write(pl);
+                if (timeout_cnt >= 30) {
+                    l = BLOCK_MODE_TIMEOUT;
+                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    log_write(pl);
+                    timeout_cnt = 0;
+                }
             }
             id_map_sweep_timeout();
             continue;
@@ -187,7 +195,8 @@ void server_mode_blocking_set() {
                     uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
                     log_write(pl);
                 }
-                if (local_receive() == 0) break;
+                if (local_receive() == 0)
+                    break;
             }
         }
         if (FD_ISSET(remote_socket_fd, &rset)) {
@@ -197,7 +206,8 @@ void server_mode_blocking_set() {
                     uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
                     log_write(pl);
                 }
-                if (remote_receive() == 0) break;
+                if (remote_receive() == 0)
+                    break;
             }
         }
     }
@@ -321,7 +331,7 @@ int remote_receive() {
             uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
             log_write(pl);
         }
-        return 1;  /* consumed one (malformed) datagram, keep draining */
+        return 1; /* consumed one (malformed) datagram, keep draining */
     }
 
     uint16_t new_id_be;
@@ -336,7 +346,7 @@ int remote_receive() {
             uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
             log_write(pl);
         }
-        return 1;  /* consumed one datagram (dropped), keep draining */
+        return 1; /* consumed one datagram (dropped), keep draining */
     }
 
     uint16_t orig_id_be = htons(orig_id);
@@ -368,7 +378,7 @@ int remote_receive() {
         uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
         log_write(pl);
     }
-    return 1;  /* successfully processed one datagram */
+    return 1; /* successfully processed one datagram */
 }
 
 int local_receive() {
@@ -393,7 +403,7 @@ int local_receive() {
             pl |= (INFO_MASK & ntohl(client_addr.sin_addr.s_addr));
             log_write(pl);
         }
-        return 1;  /* consumed one (empty) datagram, keep draining */
+        return 1; /* consumed one (empty) datagram, keep draining */
     }
 
     /* ------------------------------------------------------------------
@@ -402,8 +412,7 @@ int local_receive() {
      * ------------------------------------------------------------------ */
     if (g_cache != NULL && msg_size >= 12) {
         dns_query_fast_t qf;
-        if (dns_query_decode_fast(buf_recv, msg_size, &qf) &&
-            qf.q_type == DNS_TYPE_A) {
+        if (dns_query_decode_fast(buf_recv, msg_size, &qf) && qf.q_type == DNS_TYPE_A) {
             if (debug_mode) {
                 l = LOCAL_RECEIVE_CAN_RESOLVE_LOCALLY;
                 uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
@@ -424,11 +433,10 @@ int local_receive() {
                 ip_addr[3] = (uint8_t)(ip & 0xFF);
 
                 int nxdomain = (ip == 0);
-                int reply_size = dns_reply_encode_fast(&qf, ip_addr, nxdomain,
-                                                       buf_to_send);
+                int reply_size = dns_reply_encode_fast(&qf, ip_addr, nxdomain, buf_to_send);
                 if (reply_size > 0) {
-                    sendto(local_socket_fd, (const void*)buf_to_send, reply_size,
-                           0, (const struct sockaddr*)&client_addr, client_len);
+                    sendto(local_socket_fd, (const void*)buf_to_send, reply_size, 0,
+                           (const struct sockaddr*)&client_addr, client_len);
                 } else {
                     if (debug_mode) {
                         l = LOCAL_RECEIVE_REPLY_SIZE_ERROR;
@@ -467,7 +475,7 @@ int local_receive() {
             log_write(pl);
         }
         dns_message_free(&msg);
-        return 1;  /* consumed one datagram */
+        return 1; /* consumed one datagram */
     }
 
     uint16_t orig_id = msg.header->id;

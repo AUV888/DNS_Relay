@@ -5,5 +5,5 @@
 
 #include "DNS_debug.h"
 
-void readdata(log_event_t l);
+void read_data(log_event_t l);
 #endif

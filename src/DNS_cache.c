@@ -5,6 +5,11 @@
 
 #include "../include/DNS_debug.h"
 
+/* Global flag that suppresses the CACHE_INSERT log inside cache_insert().
+ * Set to non-zero by bulk-load paths (e.g. load_cached_dns_file) to avoid
+ * writing one log line per entry when loading a large pre-cached file. */
+int cache_insert_logging_suppressed = 0;
+
 uint32_t hash(const char* str) {
     uint32_t hash = 2166136261u;
 
@@ -97,7 +102,7 @@ int cache_insert(cache_set* s, char* src, uint32_t ip, int ttl) {
     n->next = s->bucket[h];
     s->bucket[h] = n;
     s->size++;
-    if (debug_mode) {
+    if (debug_mode && !cache_insert_logging_suppressed) {
         log_event_t l = CACHE_INSERT;
         uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
         log_write(pl);
@@ -133,7 +138,7 @@ int cache_erase(cache_set* s, char* src) {
         prev = cur;
         cur = cur->next;
     }
-    return 0;  // 未找到
+    return 0;
 }
 
 int cache_clear(cache_set* s) {
@@ -171,21 +176,33 @@ int cache_find(cache_set* s, char* src, uint32_t* ip_addr_output) {
             if (cur->expire_time > now) {
                 *ip_addr_output = cur->ipv4;
                 if (debug_mode) {
-                    log_event_t l = CACHE_FIND;
-                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-                    pl |= INFO_MASK & cur->ipv4;
-                    log_write(pl);
-                    l = CACHE_FIND_SRC;
-                    /*
-                     *[ts: 8B][payload: 8B]         ← normal header，payload high 16b=0xFFFF
-                     *[raw bytes: src_len bytes]    ← raw data, no timestamp
+                    /* First, write the domain we want to find, e.g. www.google.com
+                     * The log would be
+                     * [Timestamp : 8B][CACHE_FIND_SRC : 2B][NULL : 2B][Length of domain : 4B]
+                     * ['w' 'w' 'w' '.' 'g' 'o' 'o' 'g' 'l' 'e' '.' 'c' 'o' 'm']
                      */
+                    log_event_t l = CACHE_FIND_SRC;
                     uint32_t src_len = (uint32_t)strlen(src);
-                    pl = EVENT_MASK | (INFO_MASK & (uint64_t)src_len);
+                    uint64_t pl =
+                        (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)src_len);
                     log_write(pl);
                     log_write_bytes(src, src_len);
+
+                    /* Second, write the hash of the domain
+                     * The log would be
+                     * [Timestamp : 8B][CACHE_FIND_HASH : 2B][NULL : 2B][hash code : 4B]
+                     */
                     l = CACHE_FIND_HASH;
                     pl = (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & h);
+                    log_write(pl);
+
+                    /* Last, write the IPv4 of the domain
+                     * The log would be
+                     * [Timestamp : 8B][CACHE_FIND : 2B][NULL : 2B][IPv4 : 4B]
+                     */
+                    l = CACHE_FIND;
+                    pl = EVENT_MASK & ((uint64_t)l << 48);
+                    pl |= INFO_MASK & cur->ipv4;
                     log_write(pl);
                 }
                 return 1;

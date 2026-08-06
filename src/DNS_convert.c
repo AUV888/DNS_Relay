@@ -55,8 +55,11 @@ void convert_write_bytes(uint8_t** buf, int bytes, uint32_t value) {
         *buf += 4;
     }
     if (debug_mode) {
+        /* The log would be
+         * [Timestamp : 8B][CONVERT_WRITE_BYTE : 2B][NULL : 2B][Byte Count : 4B]
+         */
         log_event_t l = CONVERT_WRITE_BYTE;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)bytes);
         log_write(pl);
     }
 }
@@ -73,8 +76,11 @@ static inline uint8_t* get_dns_header(dns_message_t* msg, uint8_t* buf, const ui
     msg->header->arcount = convert_read_bytes(&buf, 2);
 
     if (debug_mode) {
+        /* The log would be
+         * [Timestamp : 8B][GET_DNS_HEADER_SUCCESS : 2B][NULL : 4B][id : 2B]
+         */
         log_event_t l = GET_DNS_HEADER_SUCCESS;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)msg->header->id);
         log_write(pl);
     }
     return buf;
@@ -414,7 +420,16 @@ static inline uint8_t* get_dns_answer(dns_message_t* msg, uint8_t* buf, uint8_t*
         }
         rr_ptr->next = msg->answer;
         msg->answer = rr_ptr;
+        if (debug_mode) {
+            /* The log would be
+             * [Timestamp : 8B][GET_DNS_ANSWER_SUCCESS : 2B][NULL : 4B][Type : 2B]
+             */
+            log_event_t l = GET_DNS_ANSWER_SUCCESS;
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)type);
+            log_write(pl);
+        }
     }
+
     return buf;
 }
 

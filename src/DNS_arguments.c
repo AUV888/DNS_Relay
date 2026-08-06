@@ -290,6 +290,13 @@ void load_cached_dns_file(void* cache) {
     /* Forward-declare only what we need from DNS_cache to stay decoupled.
      * cache_insert signature: int cache_insert(cache_set*, char*, uint32_t, int) */
     extern int cache_insert(void*, char*, unsigned int, int);
+    /* Suppress the per-insert CACHE_INSERT log while bulk-loading, so that
+     * loading a file with ~1M entries does not produce ~1M log lines.
+     * Save/restore so the flag is reentrant-safe and runtime cache_insert()
+     * calls (from cache_answers_from_msg) still log normally afterwards. */
+    extern int cache_insert_logging_suppressed;
+    int saved_log_flag = cache_insert_logging_suppressed;
+    cache_insert_logging_suppressed = 1;
 
     char line[640];   /* 255 (domain) + 1 (space) + 15 (ip) + newline + margin */
     int loaded = 0, skipped = 0;
@@ -327,6 +334,9 @@ void load_cached_dns_file(void* cache) {
         else
             skipped++;
     }
+
+    /* Restore the flag so later runtime inserts log normally. */
+    cache_insert_logging_suppressed = saved_log_flag;
 
     fclose(fp);
     fprintf(stdout, "load_cached_dns_file: loaded %d, skipped %d from '%s'\n",

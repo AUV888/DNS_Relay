@@ -2,7 +2,7 @@
 
 ## 📖 Project Overview
 
-A DNS relay server implemented in C language, supporting DNS caching, request forwarding, and real-time monitoring. This project is the course design assignment for "Computer Network" from BUPT, running on Linux environment.
+A DNS relay server implemented in C language, supporting DNS caching, request forwarding, and real-time monitoring. This project is the curriculum practice assignment for "Computer Network" from BUPT, running on Linux environment.
 
 **This project received a score of 99 out of 100 in Curriculum Practice of Computer Networks (1.5 credits).**
 
@@ -115,6 +115,7 @@ DNS_Relay/
 │   ├── DNS_convert.h          #   DNS wire format encode / decode
 │   ├── DNS_debug.h            #   binary 128-bit log writer + event enums
 │   ├── DNS_id.h               #   transaction-ID remapping table
+│   ├── DNS_readlog.h          #   print debug info for moredebug mode
 │   ├── DNS_server.h           #   socket setup, blocking / non-blocking loops
 │   ├── DNS_struct.h           #   DNS message data structures
 │   └── DNS_util.h             #   uint8_t pointer stack used during parsing
@@ -127,22 +128,30 @@ DNS_Relay/
 │   ├── DNS_id.c               #   ID-mapping bookkeeping
 │   ├── DNS_server.c           #   recvfrom / sendto event loop
 │   ├── DNS_readlog.c          #   print debug info for moredebug mode
+|   ├── DNS_logparser.c        #   parser for binary logs
 │   └── DNS_util.c             #   helper utilities
-├── logs/                      # Default location for binary log files (manual mkdir)
-├── Makefile                   # Build configuration (gcc -Wall -g -O0)
+├── Makefile                   # Build configuration
 └── README.md                  # This file
 ```
-
-> The log directory (`./logs/`) is **not** created automatically; create it
-> yourself (`mkdir -p logs`) before using `-d`/`-m` with a path under `logs/`.
 
 ## 📊 Usage Examples
 
 ### Basic Testing
 
 ```bash
-sudo ./DNS_Relay -s 8.8.8.8 -c cached_A_records.txt -l 5353 -d ./testing.log
-dnsperf 127.0.0.1 -d formatted_domain.txt -Q 50000 -q 50000 -p 5353 -l 60
+sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/cached_domain.txt -d ./testing.log
+dnsperf 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60
+```
+
+### Configure Cached Domains
+To use the `--cached (-c)` option, you need to prepare a list that records the IPv4 - domain pairs. This is an example:
+```text
+142.251.150.119 www.google.com
+20.205.243.166 github.com
+
+0.0.0.0 blocklist_website.com
+
+10.3.8.6 internal_website.com
 ```
 
 ## 🔧 Build Options
@@ -153,6 +162,23 @@ make
 
 # Clean build files
 make clean
+
+# Debug build
+make debug
+```
+
+## 📝 Log Parsing
+
+When you enabled `--debug (-d)` or `--moredebug (-m)` option, you will get a binary log file which is not friendly for human to read. To help you better monitor what happened to the server as well as ensuring its high performance, we introduced a utility program `Parser` to help reading the log.
+
+`Parser` is located at `./bin` by default, which is the same directory where `DNS_Relay` locates. `Parser` reads binary data from `stdin` by `scanf()` and prints out the readable information to `stdout` by `printf()`. We highly recommend that you use pipe. A typical usage of `Parser` may be:
+
+```bash
+# Save to a file and read it later
+cat /path/to/file | ./bin/Parser > /path/to/output/file 2>&1
+
+# Read immediately and find out the keyword you want to search
+cat /path/to/file | ./bin/Parser | grep -i "warn"
 ```
 
 ## 📈 Performance Metrics

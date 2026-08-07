@@ -7,10 +7,10 @@
 #include <unistd.h>
 
 #include "../include/DNS_arguments.h"
+#include "../include/DNS_cache.h"
 #include "../include/DNS_debug.h"
 #include "../include/DNS_server.h"
 #include "../include/DNS_struct.h"
-#include "../include/DNS_cache.h"
 
 volatile sig_atomic_t g_shutdown = 0;
 
@@ -22,8 +22,11 @@ static void sigint_handler(int sig) {
 }
 
 int main(int argc, char* argv[]) {
+    long worker_thread_cnt = sysconf(_SC_NPROCESSORS_ONLN);
+    printf("This program will run on \033[31m\033[1m%ld\033[0m threads\n\033[0m", worker_thread_cnt);
+
     parse_arguments(argc, argv);
-    printf("%s\n", dns_server_addr);
+    printf("Upstream server IPv4: %s\n", dns_server_addr);
 
     struct sigaction sa;
     sa.sa_handler = sigint_handler;

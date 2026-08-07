@@ -7,7 +7,7 @@ CC       = gcc
 #
 # Run `make debug` to swap to -O0 -g -Wall and rebuild.
 ifeq ($(DEBUG),1)
-CFLAGS    = -O0 -g -Wall
+CFLAGS    = -O0 -g -Wall -fsanitize=thread
 LDFLAGS   =
 OBJDIR    = bin/debug
 else
@@ -18,7 +18,8 @@ CFLAGS    = -O3 -pipe -funroll-loops -ftree-vectorize -fomit-frame-pointer \
             -fno-stack-protector -fno-math-errno -fno-trapping-math \
             -funsafe-math-optimizations -ffast-math \
             -march=native -flto \
-            -D_GNU_SOURCE
+            -D_GNU_SOURCE \
+			-pthread
 # Link-time flags.  -flto triggers LTO at link time; -s strips the symbol
 # table from the final binary (it is a linker flag, so it must NOT appear
 # during -c compile steps — clang warns "-s is unused during compilation"

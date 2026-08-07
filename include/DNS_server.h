@@ -8,6 +8,8 @@
 #define BUFFER_SIZE 1500
 #define ID_LIST_SIZE 8192
 
+extern long worker_thread_cnt;
+
 extern int local_socket_fd;
 extern int remote_socket_fd;
 extern int sock_addr_len;

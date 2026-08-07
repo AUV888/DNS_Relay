@@ -195,7 +195,14 @@ void server_mode_blocking_set() {
                     uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
                     log_write(pl);
                 }
-                if (local_receive() == 0)
+                int local = local_receive();
+                if (debug_mode) {
+                    l = BLOCK_MODE_LOCAL_RECEIVE_NUM;
+                    uint64_t pl =
+                        (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)local);
+                    log_write(pl);
+                }
+                if (local == 0)
                     break;
             }
         }
@@ -206,7 +213,14 @@ void server_mode_blocking_set() {
                     uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
                     log_write(pl);
                 }
-                if (remote_receive() == 0)
+                int remote = remote_receive();
+                if (debug_mode) {
+                    l = BLOCK_MODE_REMOTE_RECEIVE_NUM;
+                    uint64_t pl =
+                        (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)remote);
+                    log_write(pl);
+                }
+                if (remote == 0)
                     break;
             }
         }

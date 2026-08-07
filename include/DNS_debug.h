@@ -100,7 +100,9 @@ enum log_event {
     UI8_PTR_STACK_POP = 71,
     CACHE_FIND_SRC = 75,
     CACHE_FIND_HASH = 76,
-    GET_DNS_ANSWER_SUCCESS = 77
+    GET_DNS_ANSWER_SUCCESS = 77,
+    BLOCK_MODE_LOCAL_RECEIVE_NUM = 78,
+    BLOCK_MODE_REMOTE_RECEIVE_NUM = 79
 };
 
 typedef enum log_event log_event_t;

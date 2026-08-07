@@ -179,7 +179,9 @@ static const char* event_name(log_event_t l) {
         case BLOCK_MODE_ERRNO_SELECT:                return "block_mode_errno_select";
         case BLOCK_MODE_TIMEOUT:                     return "block_mode_timeout";
         case BLOCK_MODE_LOCAL_RECEIVE:               return "block_mode_local_receive";
+        case BLOCK_MODE_LOCAL_RECEIVE_NUM:           return "block_mode_local_receive_num";
         case BLOCK_MODE_REMOTE_RECEIVE:              return "block_mode_remote_receive";
+        case BLOCK_MODE_REMOTE_RECEIVE_NUM:          return "block_mode_remote_receive_num";
         case NON_BLOCK_MODE_START:                   return "non_block_mode_start";
         case NON_BLOCK_MODE_LOCAL_FGETFL_ERR:        return "non_block_mode_local_fgetfl_err";
         case NON_BLOCK_MODE_LOCAL_FSETFL_ERR:        return "non_block_mode_local_fsetfl_err";
@@ -297,13 +299,13 @@ static void skip_n_bytes(uint64_t n) {
 /* ----------------------------------------------------------------------- */
 /* Print the status prefix:  [✅] event_name:  (with optional color)       */
 /* ----------------------------------------------------------------------- */
-static void print_prefix(log_level_t lv, const char* name, int use_color) {
+static void print_prefix(log_level_t lv, int use_color) {
     if (use_color) {
-        printf("%s[%s]%s %s%s%s: ",
+        printf("%s[%s]%s %s%s ",
                level_color(lv), level_label(lv), ANSI_RESET,
-               level_color(lv), name, ANSI_RESET);
+               level_color(lv), ANSI_RESET);
     } else {
-        printf("[%s] %s: ", level_label(lv), name);
+        printf("[%s] ", level_label(lv));
     }
 }
 
@@ -385,9 +387,17 @@ static void print_human_message(log_event_t ev, uint64_t info) {
             printf("select() timed out (30s heartbeat, housekeeping still runs every 1s).");
             break;
         case BLOCK_MODE_LOCAL_RECEIVE:
-            printf("Block mode: receiving from local socket."); break;
+            printf("Block mode: trying to receive from local socket."); break;
+        case BLOCK_MODE_LOCAL_RECEIVE_NUM: {
+            printf("Block mode: received %u from local socket.", (unsigned)info);
+            break;            
+        }
         case BLOCK_MODE_REMOTE_RECEIVE:
-            printf("Block mode: receiving from remote socket."); break;
+            printf("Block mode: trying to receive from remote socket."); break;
+        case BLOCK_MODE_REMOTE_RECEIVE_NUM: {
+            printf("Block mode: received %u from remote socket.", (unsigned)info);
+            break;            
+        }
         case NON_BLOCK_MODE_START:
             printf("Non-block mode event loop started."); break;
         case NON_BLOCK_MODE_LOCAL_FGETFL_ERR:
@@ -409,7 +419,7 @@ static void print_human_message(log_event_t ev, uint64_t info) {
          * CACHE
          * ================================================================ */
         case CACHE_FIND: {
-            printf("Cache HIT! ipv4=");
+            printf("Cache HIT! IPv4 = ");
             print_ipv4(info);
             printf(".");
             break;
@@ -474,7 +484,7 @@ static void print_human_message(log_event_t ev, uint64_t info) {
          * ================================================================ */
         case GET_DNS_HEADER_SUCCESS: {
             /* info = DNS header id (uint16_t, lower 16 bits). */
-            printf("Get DNS header id=%u success.", (unsigned)(info & 0xFFFFU));
+            printf("Get DNS header id %u success.", (unsigned)(info & 0xFFFFU));
             break;
         }
         case GET_DNS_QUESTION_MALLOC_ERR:
@@ -610,7 +620,7 @@ int main(int argc, char** argv) {
         printf("[%s] ", tbuf);
 
         /* Status prefix: [✅]/[ERROR]/[WARN]/[INFO] + lowercase event_name + ":" */
-        print_prefix(event_level(ev), event_name(ev), use_color);
+        print_prefix(event_level(ev), use_color);
 
         /* Human-friendly message (event-specific). */
         print_human_message(ev, info);

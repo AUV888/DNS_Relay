@@ -12,7 +12,8 @@
  *   [timestamp : 8 bytes]   uint64_t, microseconds since epoch (gettimeofday)
  *   [payload  : 8 bytes]    uint64_t, bits 48..63 = event id (log_event_t),
  *                                   bits 32..47 = writer thread id
- *                                                 (0-based worker index, or
+ *                                                 (0-based worker index,
+ *                                                 0xFFFE for the dispatcher,
  *                                                 0xFFFF for the main thread),
  *                                   bits  0..31 = info field
  *
@@ -624,6 +625,8 @@ int main(int argc, char** argv) {
         printf("[%s] ", tbuf);
         if (thread_id == LOG_THREAD_ID_MAIN) {
             printf("[main] ");
+        } else if (thread_id == LOG_THREAD_ID_DISPATCHER) {
+            printf("[disp] ");
         } else {
             printf("[pth%u] ", (unsigned)thread_id);
         }

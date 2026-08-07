@@ -24,8 +24,10 @@ typedef __uint128_t uint128_t;
 
 /* Thread id written into THREAD_MASK of every record.  Each worker sets
  * log_thread_id to its own 0-based index before writing anything; the
- * main thread keeps LOG_THREAD_ID_MAIN. */
+ * main thread keeps LOG_THREAD_ID_MAIN and the dispatcher thread uses
+ * LOG_THREAD_ID_DISPATCHER. */
 #define LOG_THREAD_ID_MAIN 0xFFFF
+#define LOG_THREAD_ID_DISPATCHER 0xFFFE
 extern _Thread_local uint16_t log_thread_id;
 
 extern FILE* log_fp;

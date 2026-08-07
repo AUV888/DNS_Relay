@@ -7,6 +7,8 @@ void read_data(log_event_t l, uint16_t thread_id) {
      * emitted the event. */
     if (thread_id == LOG_THREAD_ID_MAIN)
         printf("[main] ");
+    else if (thread_id == LOG_THREAD_ID_DISPATCHER)
+        printf("[disp] ");
     else
         printf("[pth%u] ", (unsigned)thread_id);
 

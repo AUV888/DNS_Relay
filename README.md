@@ -106,12 +106,12 @@ as long as flags requiring an argument appear last.
 
 ## 🧵 Multi-threaded Architecture
 
-In the default (blocking) mode, `main` spawns `N = sysconf(_SC_NPROCESSORS_ONLN)` worker threads and joins them on shutdown:
+In the default (blocking) mode, `main` spawns one **dispatcher** thread plus `N = sysconf(_SC_NPROCESSORS_ONLN)` **worker** threads, and joins them on shutdown:
 
-- **No shared sockets.** Every worker creates its own listening socket with `SO_REUSEPORT` bound to the same port; the kernel hashes each packet's 4-tuple to exactly one worker (no thundering herd). Each worker also owns its upstream socket, so upstream replies always return to the worker that forwarded the query.
+- **Dispatcher + round-robin workers.** The dispatcher is the sole reader of the shared listening socket; for every incoming query it does `cnt++ % N` and copies the packet into that worker's lock-free SPSC ring. Each worker busy-polls its own ring, answers cache hits through the shared socket and forwards misses through its **private upstream socket**, so upstream replies always return to the worker that forwarded the query. This distributes traffic evenly even when all load comes from a single flow (e.g. loopback benchmarks), where hash-based schemes like `SO_REUSEPORT` would pin everything to one worker.
 - **Sharded shared state.** The DNS cache (16 shards × 65536 buckets) and the transaction-ID map (16 shards × 512 slots) are protected by one mutex per shard; ID-map sweeps run on worker 0 only.
-- **Serialized logging.** All writers take a single log mutex, so 16-byte records and multi-record debug sequences never interleave. Every record's payload carries the writer's thread id (bits 32..47): workers use their 0-based index, the main thread uses `0xFFFF`.
-- **Signal-safe shutdown.** `SIGINT` only sets an atomic flag; cleanup (cache destroy, socket close, log flush) runs in `main` after all workers have been joined.
+- **Serialized logging.** All writers take a single log mutex, so 16-byte records and multi-record debug sequences never interleave. Every record's payload carries the writer's thread id (bits 32..47): workers use their 0-based index, the dispatcher uses `0xFFFE`, the main thread uses `0xFFFF`.
+- **Signal-safe shutdown.** `SIGINT` only sets an atomic flag; cleanup (cache destroy, socket close, log flush) runs in `main` after all threads have been joined.
 
 The `-n` (non-blocking) mode remains single-threaded for legacy comparison.
 

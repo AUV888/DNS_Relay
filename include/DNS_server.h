@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <stdatomic.h>
+#include <stdint.h>
 #include <sys/socket.h>
 
 #define BUFFER_SIZE 1500
@@ -33,14 +34,15 @@ extern struct SET* g_cache;
  * inside it is shared with other threads. */
 typedef struct worker_ctx {
     int tid;                        /* 0-based worker index */
-    int local_fd;                   /* private listening socket (SO_REUSEPORT) */
+    int local_fd;                   /* shared listening socket; replies leave through it */
     int remote_fd;                  /* private upstream socket */
     struct sockaddr_in remote_addr; /* read-only copy of the upstream endpoint */
 } worker_ctx_t;
 
-/*@brief Prepare addresses, cache and ID map.  Creates the legacy global
- *       sockets only for the single-threaded non-blocking mode; in the
- *       multi-threaded blocking mode each worker owns its own sockets.
+/*@brief Prepare addresses, cache, ID map and the shared listening socket.
+ *       The global upstream socket is created only for the single-threaded
+ *       non-blocking mode; in the multi-threaded blocking mode every
+ *       worker owns its own upstream socket.
  */
 void server_socket_init();
 
@@ -52,5 +54,12 @@ void server_mode_non_blocking_set();
 /* Returns 1 if a packet was processed, 0 if no more packets (EAGAIN/error). */
 int remote_receive(worker_ctx_t* ctx);
 int local_receive(worker_ctx_t* ctx);
+
+/* Process one already-received query datagram (buf_recv must be writable:
+ * the slow path rewrites the DNS transaction ID in place before forwarding).
+ * Used by the multi-threaded workers on packets handed over by the
+ * dispatcher via the per-worker SPSC rings. */
+int local_process_packet(worker_ctx_t* ctx, uint8_t* buf_recv, int msg_size,
+                         const struct sockaddr_in* client_addr, socklen_t client_len);
 
 #endif

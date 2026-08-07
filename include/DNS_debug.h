@@ -9,8 +9,24 @@
 
 typedef __uint128_t uint128_t;
 
+/* One log record is 16 bytes:
+ *   [timestamp : 8B]  microseconds since epoch
+ *   [payload   : 8B]  split into three fields:
+ *       bits 48..63  event id  (log_event_t)   -> EVENT_MASK
+ *       bits 32..47  writer thread id          -> THREAD_MASK
+ *                    (workers use their 0-based index, the main thread
+ *                     uses LOG_THREAD_ID_MAIN)
+ *       bits  0..31  event-specific info       -> INFO_MASK
+ */
 #define EVENT_MASK 0xFFFF000000000000
-#define INFO_MASK 0x0000FFFFFFFFFFFF
+#define THREAD_MASK 0x0000FFFF00000000
+#define INFO_MASK 0x00000000FFFFFFFF
+
+/* Thread id written into THREAD_MASK of every record.  Each worker sets
+ * log_thread_id to its own 0-based index before writing anything; the
+ * main thread keeps LOG_THREAD_ID_MAIN. */
+#define LOG_THREAD_ID_MAIN 0xFFFF
+extern _Thread_local uint16_t log_thread_id;
 
 extern FILE* log_fp;
 
@@ -21,7 +37,21 @@ void log_close(void);
 void log_write(uint64_t payload);
 
 void log_write_bytes(const void* data, uint32_t len);
-extern char timeout_cnt;
+
+/* Multi-threaded logging helpers.  log_write()/log_write_bytes() take
+ * the internal log mutex themselves.  To emit a multi-record debug
+ * sequence atomically (so no other thread's record can interleave in
+ * the middle), hold the mutex across the whole sequence:
+ *
+ *     log_lock();
+ *     log_write_nolock(...);   log_write_bytes_nolock(...);
+ *     log_write_nolock(...);
+ *     log_unlock();
+ */
+void log_lock(void);
+void log_unlock(void);
+void log_write_nolock(uint64_t payload);
+void log_write_bytes_nolock(const void* data, uint32_t len);
 
 enum log_event {
     LOCAL_SOCKET_FAILED = 1,

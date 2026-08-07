@@ -5,5 +5,8 @@
 
 #include "DNS_debug.h"
 
-void read_data(log_event_t l);
+/* Prints the "[main]"/"[pthN]" writer tag followed by the event name.
+ * thread_id is LOG_THREAD_ID_MAIN for the main thread, otherwise the
+ * 0-based worker index. */
+void read_data(log_event_t l, uint16_t thread_id);
 #endif

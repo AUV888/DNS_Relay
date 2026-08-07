@@ -11,6 +11,7 @@ To reproduce the figures, please refer to [./artifact_evaluation/AE_README.md](.
 ## ✨ Features
 
 - ✅ **High Performance** - 0 Cache: **9218** QPS, Mixed Cache: **33218** QPS, Full Cache: **132869** QPS
+- ✅ **Multi-threaded** - N worker threads (N = online CPU count), each with its own `SO_REUSEPORT` socket pair; 16-shard locked cache and ID map; mutex-serialized binary log
 - ✅ **DNS Protocol Parsing** - Full support for DNS message format
 - ✅ **Lazy & Periodic Cleanup Cache Mechanism** - Efficient caching of DNS query results
 - ✅ **Concurrent Processing** - Support for multiple simultaneous clients
@@ -103,6 +104,17 @@ as long as flags requiring an argument appear last.
 ./bin/DNS_Relay --server 8.8.8.8 --listenport 5353 --nonblocking
 ```
 
+## 🧵 Multi-threaded Architecture
+
+In the default (blocking) mode, `main` spawns `N = sysconf(_SC_NPROCESSORS_ONLN)` worker threads and joins them on shutdown:
+
+- **No shared sockets.** Every worker creates its own listening socket with `SO_REUSEPORT` bound to the same port; the kernel hashes each packet's 4-tuple to exactly one worker (no thundering herd). Each worker also owns its upstream socket, so upstream replies always return to the worker that forwarded the query.
+- **Sharded shared state.** The DNS cache (16 shards × 65536 buckets) and the transaction-ID map (16 shards × 512 slots) are protected by one mutex per shard; ID-map sweeps run on worker 0 only.
+- **Serialized logging.** All writers take a single log mutex, so 16-byte records and multi-record debug sequences never interleave. Every record's payload carries the writer's thread id (bits 32..47): workers use their 0-based index, the main thread uses `0xFFFF`.
+- **Signal-safe shutdown.** `SIGINT` only sets an atomic flag; cleanup (cache destroy, socket close, log flush) runs in `main` after all workers have been joined.
+
+The `-n` (non-blocking) mode remains single-threaded for legacy comparison.
+
 ## 📁 Project Structure
 
 ```
@@ -173,6 +185,8 @@ When you enabled `--debug (-d)` or `--moredebug (-m)` option, you will get a bin
 
 `Parser` is located at `./bin` by default, which is the same directory where `DNS_Relay` locates. `Parser` reads binary data from `stdin` by `scanf()` and prints out the readable information to `stdout` by `printf()`. We highly recommend that you use pipe. A typical usage of `Parser` may be:
 
+Each binary record is 16 bytes: `[timestamp : 8B][event : 2B][writer thread : 2B][info : 4B]`. `Parser` prints the writer of every record as a `[main]` / `[pthN]` tag right after the timestamp.
+
 ```bash
 # Save to a file and read it later
 cat /path/to/file | ./bin/Parser > /path/to/output/file 2>&1
@@ -182,6 +196,8 @@ cat /path/to/file | ./bin/Parser | grep -i "warn"
 ```
 
 ## 📈 Performance Metrics
+
+> The numbers below are **single-thread baselines**. Multi-threaded measurements (SO_REUSEPORT workers) are work in progress.
 
 | Metric                                            | Expected         | Description                                                                                                                                                                        |
 | ------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

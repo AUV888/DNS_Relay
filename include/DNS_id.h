@@ -11,6 +11,18 @@
 
 #define ID_MAP_TIMEOUT 5
 
+/* The ID map is split into ID_SHARDS independent shards, each guarded by
+ * its own mutex, so concurrent workers contend on smaller locks.
+ *
+ * A relayed (new) DNS transaction ID still encodes the slot position:
+ *     new_id = shard_index * ID_SHARD_SIZE + slot
+ * The value range stays [0, ID_LIST_SIZE), so any worker that receives an
+ * upstream reply can locate the owning shard of that ID in O(1) without
+ * any cross-shard search.
+ */
+#define ID_SHARDS 16
+#define ID_SHARD_SIZE (ID_LIST_SIZE / ID_SHARDS)
+
 typedef struct id_entry {
     char used;                       // 1 = slot in use, 0 = free
     uint16_t original_id;            // the ID the client put in its query

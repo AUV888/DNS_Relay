@@ -4,6 +4,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,30 +37,10 @@ struct sockaddr_in local_addr;
 struct sockaddr_in remote_addr;
 
 cache_set* g_cache;
-char timeout_cnt = 0;
 
 void server_socket_init() {
     log_event_t l;
     sock_addr_len = sizeof(local_addr);
-
-    local_socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (local_socket_fd < 0) {
-        if (debug_mode) {
-            l = LOCAL_SOCKET_FAILED;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-            log_write(pl);
-        }
-        exit(EXIT_FAILURE);
-    }
-    remote_socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (remote_socket_fd < 0) {
-        if (debug_mode) {
-            l = REMOTE_SOCKET_FAILED;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-            log_write(pl);
-        }
-        exit(EXIT_FAILURE);
-    }
 
     memset(&local_addr, 0, sizeof(local_addr));
     memset(&remote_addr, 0, sizeof(remote_addr));
@@ -71,11 +53,58 @@ void server_socket_init() {
     remote_addr.sin_addr.s_addr = inet_addr(dns_server_addr);
     remote_addr.sin_port = htons(dns_upstream_port);
 
+    g_cache = create_hset();
+    cache_init(g_cache);
+    /* Initialize the sharded ID map (per-shard mutexes + cursors).  The
+     * old table relied on static zero-initialization; the sharded one
+     * needs explicit pthread_mutex_init before first use. */
+    id_map_init();
+
+    if (blocking_mode) {
+        /* Multi-threaded path: every worker creates its own socket pair in
+         * worker_main(), with SO_REUSEPORT on the listening socket so the
+         * kernel spreads clients across workers by 4-tuple hash.
+         *
+         * Deliberately NOT creating a shared listening socket here: it
+         * would join the SO_REUSEPORT group and silently swallow its share
+         * of incoming queries, because nobody would ever read from it. */
+        if (debug_mode) {
+            l = SOCKET_INIT_SUCCESS;
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
+            log_write(pl);
+        }
+        return;
+    }
+
+    /* Legacy single-threaded (non-blocking) path: shared global sockets. */
+    local_socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (local_socket_fd < 0) {
+        if (debug_mode) {
+            l = LOCAL_SOCKET_FAILED;
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
+            log_write(pl);
+        }
+        exit(EXIT_FAILURE);
+    }
+    remote_socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (remote_socket_fd < 0) {
+        if (debug_mode) {
+            l = REMOTE_SOCKET_FAILED;
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
+            log_write(pl);
+        }
+        exit(EXIT_FAILURE);
+    }
+
     int opt = 1;
     if (setsockopt(local_socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         if (debug_mode) {
             l = SOCKET_OPT_FAILED;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         exit(EXIT_FAILURE);
@@ -84,23 +113,22 @@ void server_socket_init() {
     if (bind(local_socket_fd, (const struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
         if (debug_mode) {
             l = SOCKET_BIND_FAILED;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         exit(EXIT_FAILURE);
     }
 
-    g_cache = create_hset();
-    cache_init(g_cache);
-
-    /* Make both sockets non-blocking so recvfrom returns EAGAIN when the
-     * kernel buffer is empty.  This lets the event loop drain all pending
-     * packets in a single select() wake-up instead of returning to select
-     * after every single datagram. */
+    /* Legacy path only: make both global sockets non-blocking so
+     * recvfrom returns EAGAIN when the kernel buffer is empty.  (The
+     * multi-threaded path returned early above and does the same per
+     * worker inside worker_main.) */
     if (set_nonblocking(local_socket_fd) < 0 || set_nonblocking(remote_socket_fd) < 0) {
         if (debug_mode) {
             l = NON_BLOCK_MODE_LOCAL_FSETFL_ERR;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         exit(EXIT_FAILURE);
@@ -108,7 +136,8 @@ void server_socket_init() {
 
     if (debug_mode) {
         l = SOCKET_INIT_SUCCESS;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+            (THREAD_MASK & ((uint64_t)log_thread_id << 32));
         log_write(pl);
     }
 }
@@ -125,28 +154,109 @@ void server_socket_close() {
     }
     if (debug_mode) {
         l = SOCKET_CLOSE_SUCCESS;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+            (THREAD_MASK & ((uint64_t)log_thread_id << 32));
         log_write(pl);
     }
 }
 
-void server_mode_blocking_set() {
-    log_event_t l;
-    if (debug_mode) {
-        l = BLOCK_MODE_START;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
-        log_write(pl);
-    }
-    int maxfd = (local_socket_fd > remote_socket_fd ? local_socket_fd : remote_socket_fd) + 1;
+/* -----------------------------------------------------------------------
+ * Multi-threaded blocking mode.
+ *
+ * server_mode_blocking_set() spawns worker_thread_cnt worker threads and
+ * blocks until all of them have exited.  Each worker owns a private
+ * socket pair and runs its own copy of the original select() event loop.
+ * The only state shared between workers is the sharded cache, the
+ * sharded ID map and the debug log — all mutex-protected.
+ *
+ * SO_REUSEPORT on every worker's listening socket lets them all bind the
+ * same port; the kernel then hashes each incoming packet's 4-tuple to
+ * exactly one socket, so there is no thundering herd and no shared fd.
+ * ----------------------------------------------------------------------- */
+static void* worker_main(void* arg) {
+    worker_ctx_t* ctx = (worker_ctx_t*)arg;
 
-    while (1) {
-        if (g_shutdown) {
-            return;
+    /* Tag every log record this worker writes with its 0-based index.
+     * Must happen before the first log_write() of this thread; the main
+     * thread keeps LOG_THREAD_ID_MAIN. */
+    log_thread_id = (uint16_t)ctx->tid;
+
+    ctx->local_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (ctx->local_fd < 0) {
+        if (debug_mode) {
+            log_event_t l = LOCAL_SOCKET_FAILED;
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
+            log_write(pl);
         }
+        return NULL;
+    }
+
+    int opt = 1;
+    if (setsockopt(ctx->local_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0 ||
+        setsockopt(ctx->local_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+        if (debug_mode) {
+            log_event_t l = SOCKET_OPT_FAILED;
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
+            log_write(pl);
+        }
+        close(ctx->local_fd);
+        return NULL;
+    }
+
+    /* local_addr is read-only from this point on (filled once by
+     * server_socket_init before any worker was created). */
+    if (bind(ctx->local_fd, (const struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
+        if (debug_mode) {
+            log_event_t l = SOCKET_BIND_FAILED;
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
+            log_write(pl);
+        }
+        close(ctx->local_fd);
+        return NULL;
+    }
+
+    /* Each worker also owns its upstream socket: replies from the
+     * upstream server match this socket's 4-tuple, so they always come
+     * back to the very worker that forwarded the query. */
+    ctx->remote_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (ctx->remote_fd < 0) {
+        if (debug_mode) {
+            log_event_t l = REMOTE_SOCKET_FAILED;
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
+            log_write(pl);
+        }
+        close(ctx->local_fd);
+        return NULL;
+    }
+
+    /* Non-blocking fds let the loop drain every pending datagram in one
+     * select() wake-up instead of returning to select after each one. */
+    if (set_nonblocking(ctx->local_fd) < 0 || set_nonblocking(ctx->remote_fd) < 0) {
+        if (debug_mode) {
+            log_event_t l = NON_BLOCK_MODE_LOCAL_FSETFL_ERR;
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
+            log_write(pl);
+        }
+        close(ctx->local_fd);
+        close(ctx->remote_fd);
+        return NULL;
+    }
+
+    int maxfd = (ctx->local_fd > ctx->remote_fd ? ctx->local_fd : ctx->remote_fd) + 1;
+
+    /* Per-worker throttle counter for the timeout heartbeat log. */
+    int timeout_cnt = 0;
+
+    while (!atomic_load(&g_shutdown)) {
         fd_set rset;
         FD_ZERO(&rset);
-        FD_SET(local_socket_fd, &rset);
-        FD_SET(remote_socket_fd, &rset);
+        FD_SET(ctx->local_fd, &rset);
+        FD_SET(ctx->remote_fd, &rset);
 
         /* Wake up at least once per second so we can run housekeeping. */
         struct timeval tv = {1, 0};
@@ -155,15 +265,17 @@ void server_mode_blocking_set() {
         if (n < 0) {
             if (errno == EINTR) {
                 if (debug_mode) {
-                    l = BLOCK_MODE_ERRNO_EINTR;
-                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    log_event_t l = BLOCK_MODE_ERRNO_EINTR;
+                    uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                        (THREAD_MASK & ((uint64_t)log_thread_id << 32));
                     log_write(pl);
                 }
                 continue;  // interrupted by signal, retry
             }
             if (debug_mode) {
-                l = BLOCK_MODE_ERRNO_SELECT;
-                uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                log_event_t l = BLOCK_MODE_ERRNO_SELECT;
+                uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                    (THREAD_MASK & ((uint64_t)log_thread_id << 32));
                 log_write(pl);
             }
             break;
@@ -176,48 +288,60 @@ void server_mode_blocking_set() {
             timeout_cnt++;
             if (debug_mode) {
                 if (timeout_cnt >= 30) {
-                    l = BLOCK_MODE_TIMEOUT;
-                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    log_event_t l = BLOCK_MODE_TIMEOUT;
+                    uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                        (THREAD_MASK & ((uint64_t)log_thread_id << 32));
                     log_write(pl);
                     timeout_cnt = 0;
                 }
             }
-            id_map_sweep_timeout();
+            /* Only worker 0 sweeps the ID map.  Every shard is
+             * mutex-protected so the sweep is safe to run, but doing it
+             * N times per second would be pure lock contention. */
+            if (ctx->tid == 0) {
+                id_map_sweep_timeout();
+            }
             continue;
         }
 
         /* Drain all pending packets from each ready socket so that the
          * kernel buffer never builds up across select() calls. */
-        if (FD_ISSET(local_socket_fd, &rset)) {
+        if (FD_ISSET(ctx->local_fd, &rset)) {
             while (1) {
                 if (debug_mode) {
-                    l = BLOCK_MODE_LOCAL_RECEIVE;
-                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    log_event_t l = BLOCK_MODE_LOCAL_RECEIVE;
+                    uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                        (THREAD_MASK & ((uint64_t)log_thread_id << 32));
                     log_write(pl);
                 }
-                int local = local_receive();
+                int local = local_receive(ctx);
                 if (debug_mode) {
-                    l = BLOCK_MODE_LOCAL_RECEIVE_NUM;
+                    log_event_t l = BLOCK_MODE_LOCAL_RECEIVE_NUM;
                     uint64_t pl =
-                        (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)local);
+                        (EVENT_MASK & ((uint64_t)l << 48)) |
+                        (THREAD_MASK & ((uint64_t)log_thread_id << 32)) |
+                        (INFO_MASK & (uint64_t)local);
                     log_write(pl);
                 }
                 if (local == 0)
                     break;
             }
         }
-        if (FD_ISSET(remote_socket_fd, &rset)) {
+        if (FD_ISSET(ctx->remote_fd, &rset)) {
             while (1) {
                 if (debug_mode) {
-                    l = BLOCK_MODE_REMOTE_RECEIVE;
-                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    log_event_t l = BLOCK_MODE_REMOTE_RECEIVE;
+                    uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                        (THREAD_MASK & ((uint64_t)log_thread_id << 32));
                     log_write(pl);
                 }
-                int remote = remote_receive();
+                int remote = remote_receive(ctx);
                 if (debug_mode) {
-                    l = BLOCK_MODE_REMOTE_RECEIVE_NUM;
+                    log_event_t l = BLOCK_MODE_REMOTE_RECEIVE_NUM;
                     uint64_t pl =
-                        (EVENT_MASK & ((uint64_t)l << 48)) | (INFO_MASK & (uint64_t)remote);
+                        (EVENT_MASK & ((uint64_t)l << 48)) |
+                        (THREAD_MASK & ((uint64_t)log_thread_id << 32)) |
+                        (INFO_MASK & (uint64_t)remote);
                     log_write(pl);
                 }
                 if (remote == 0)
@@ -225,6 +349,53 @@ void server_mode_blocking_set() {
             }
         }
     }
+
+    close(ctx->local_fd);
+    close(ctx->remote_fd);
+    ctx->local_fd = -1;
+    ctx->remote_fd = -1;
+    return NULL;
+}
+
+void server_mode_blocking_set() {
+    if (debug_mode) {
+        log_event_t l = BLOCK_MODE_START;
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+            (THREAD_MASK & ((uint64_t)log_thread_id << 32));
+        log_write(pl);
+    }
+
+    long n = worker_thread_cnt > 0 ? worker_thread_cnt : 1;
+    pthread_t* tids = (pthread_t*)malloc((size_t)n * sizeof(pthread_t));
+    worker_ctx_t* ctxs = (worker_ctx_t*)malloc((size_t)n * sizeof(worker_ctx_t));
+    if (!tids || !ctxs) {
+        free(tids);
+        free(ctxs);
+        return;
+    }
+
+    long started = 0;
+    for (long i = 0; i < n; i++) {
+        ctxs[i].tid = (int)i;
+        ctxs[i].local_fd = -1;
+        ctxs[i].remote_fd = -1;
+        ctxs[i].remote_addr = remote_addr; /* read-only snapshot */
+        if (pthread_create(&tids[i], NULL, worker_main, &ctxs[i]) != 0) {
+            fprintf(stderr, "failed to start worker thread %ld\n", i);
+            break;
+        }
+        started++;
+    }
+
+    /* Wait for every worker; each one exits on its own once it observes
+     * g_shutdown (at most ~1s, bounded by the select timeout).  After
+     * the joins, no thread can touch the shared structures anymore. */
+    for (long i = 0; i < started; i++) {
+        pthread_join(tids[i], NULL);
+    }
+
+    free(tids);
+    free(ctxs);
 }
 
 void server_mode_non_blocking_set() {
@@ -233,14 +404,16 @@ void server_mode_non_blocking_set() {
     log_event_t l;
     if (debug_mode) {
         l = NON_BLOCK_MODE_START;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+            (THREAD_MASK & ((uint64_t)log_thread_id << 32));
         log_write(pl);
     }
     flags = fcntl(local_socket_fd, F_GETFL, 0);  // get file status flags
     if (flags < 0) {
         if (debug_mode) {
             l = NON_BLOCK_MODE_LOCAL_FGETFL_ERR;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         return;
@@ -248,7 +421,8 @@ void server_mode_non_blocking_set() {
     if (fcntl(local_socket_fd, F_SETFL, flags | O_NONBLOCK) < 0) {  // set file status flags
         if (debug_mode) {
             l = NON_BLOCK_MODE_LOCAL_FSETFL_ERR;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
     }
@@ -257,7 +431,8 @@ void server_mode_non_blocking_set() {
     if (flags < 0) {
         if (debug_mode) {
             l = NON_BLOCK_MODE_REMOTE_FGETFL_ERR;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         return;
@@ -265,34 +440,46 @@ void server_mode_non_blocking_set() {
     if (fcntl(remote_socket_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
         if (debug_mode) {
             l = NON_BLOCK_MODE_REMOTE_FSETFL_ERR;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
     }
 
+    /* Wrap the two legacy global sockets in a worker context so both
+     * modes share exactly the same packet-processing code path. */
+    worker_ctx_t ctx;
+    ctx.tid = 0;
+    ctx.local_fd = local_socket_fd;
+    ctx.remote_fd = remote_socket_fd;
+    ctx.remote_addr = remote_addr;
+
     time_t last_sweep = time(NULL);
 
     while (1) {
-        if (g_shutdown) {
+        if (atomic_load(&g_shutdown)) {
             return;
         }
-        local_receive();
+        local_receive(&ctx);
         if (debug_mode) {
             l = NON_BLOCK_MODE_LOCAL_RECEIVE;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
-        remote_receive();
+        remote_receive(&ctx);
         if (debug_mode) {
             l = NON_BLOCK_MODE_REMOTE_RECEIVE;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         time_t now = time(NULL);
         if (now - last_sweep >= 1) {
             if (debug_mode) {
                 l = NON_BLOCK_SWEEP;
-                uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                    (THREAD_MASK & ((uint64_t)log_thread_id << 32));
                 log_write(pl);
             }
             id_map_sweep_timeout();
@@ -321,19 +508,20 @@ static inline void cache_answers_from_msg(dns_message_t* msg) {
     }
     if (debug_mode) {
         log_event_t l = REMOTE_RECEIVE_CACHED_ANSWER_SUCCESS;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+            (THREAD_MASK & ((uint64_t)log_thread_id << 32));
         log_write(pl);
     }
 }
 
-int remote_receive() {
+int remote_receive(worker_ctx_t* ctx) {
     uint8_t buf_recv[BUFFER_SIZE];
 
     log_event_t l;
     struct sockaddr_in upstream_addr;
     socklen_t upstream_len = sizeof(upstream_addr);
 
-    int msg_size = recvfrom(remote_socket_fd, (void*)buf_recv, sizeof(buf_recv), 0,
+    int msg_size = recvfrom(ctx->remote_fd, (void*)buf_recv, sizeof(buf_recv), 0,
                             (struct sockaddr*)&upstream_addr, &upstream_len);
     if (msg_size < 0) {
         /* EAGAIN / EWOULDBLOCK means the buffer is empty — stop draining. */
@@ -342,7 +530,8 @@ int remote_receive() {
     if (msg_size < 2) {
         if (debug_mode) {
             l = REMOTE_RECEIVE_MSG_SIZE_ERR;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         return 1; /* consumed one (malformed) datagram, keep draining */
@@ -357,7 +546,8 @@ int remote_receive() {
     if (!id_map_find(new_id, &orig_id, &client_addr)) {  // no original id, drop
         if (debug_mode) {
             l = REMOTE_RECEIVE_NO_ORIG_ID_DROP;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         return 1; /* consumed one datagram (dropped), keep draining */
@@ -366,12 +556,13 @@ int remote_receive() {
     uint16_t orig_id_be = htons(orig_id);
     memcpy(buf_recv, &orig_id_be, 2);
 
-    sendto(local_socket_fd, (const void*)buf_recv, msg_size, 0,
+    sendto(ctx->local_fd, (const void*)buf_recv, msg_size, 0,
            (const struct sockaddr*)&client_addr, sizeof(client_addr));
 
     if (debug_mode) {
         l = REMOTE_RECEIVE_SENT_TO_CLIENT;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+            (THREAD_MASK & ((uint64_t)log_thread_id << 32));
         log_write(pl);
     }
     id_map_erase(new_id);
@@ -379,7 +570,8 @@ int remote_receive() {
     if (g_cache != NULL) {
         if (debug_mode) {
             l = REMOTE_RECEIVE_HAS_GLOBAL_CACHE;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         dns_message_t msg;
@@ -389,13 +581,14 @@ int remote_receive() {
         dns_message_free(&msg);
     } else if (g_cache == NULL && debug_mode) {
         l = REMOTE_RECEIVE_NO_GLOBAL_CACHE;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+            (THREAD_MASK & ((uint64_t)log_thread_id << 32));
         log_write(pl);
     }
     return 1; /* successfully processed one datagram */
 }
 
-int local_receive() {
+int local_receive(worker_ctx_t* ctx) {
     log_event_t l;
     uint8_t buf_recv[BUFFER_SIZE];
     uint8_t buf_to_send[BUFFER_SIZE];
@@ -404,7 +597,7 @@ int local_receive() {
     socklen_t client_len = sizeof(client_addr);
     memset(&client_addr, 0, sizeof(client_addr));
 
-    int msg_size = recvfrom(local_socket_fd, (void*)buf_recv, sizeof(buf_recv), 0,
+    int msg_size = recvfrom(ctx->local_fd, (void*)buf_recv, sizeof(buf_recv), 0,
                             (struct sockaddr*)&client_addr, &client_len);
     if (msg_size < 0) {
         /* EAGAIN / EWOULDBLOCK: no more packets in the kernel buffer. */
@@ -413,7 +606,8 @@ int local_receive() {
     if (msg_size == 0) {
         if (debug_mode) {
             l = LOCAL_RECEIVE_RECVFROM_FAILED;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             pl |= (INFO_MASK & ntohl(client_addr.sin_addr.s_addr));
             log_write(pl);
         }
@@ -429,14 +623,16 @@ int local_receive() {
         if (dns_query_decode_fast(buf_recv, msg_size, &qf) && qf.q_type == DNS_TYPE_A) {
             if (debug_mode) {
                 l = LOCAL_RECEIVE_CAN_RESOLVE_LOCALLY;
-                uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                    (THREAD_MASK & ((uint64_t)log_thread_id << 32));
                 log_write(pl);
             }
             uint32_t ip = 0;
             if (cache_find(g_cache, qf.q_name, &ip)) {
                 if (debug_mode) {
                     l = LOCAL_RECEIVE_HIT_CACHE;
-                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                        (THREAD_MASK & ((uint64_t)log_thread_id << 32));
                     pl |= (INFO_MASK & ip);
                     log_write(pl);
                 }
@@ -449,18 +645,20 @@ int local_receive() {
                 int nxdomain = (ip == 0);
                 int reply_size = dns_reply_encode_fast(&qf, ip_addr, nxdomain, buf_to_send);
                 if (reply_size > 0) {
-                    sendto(local_socket_fd, (const void*)buf_to_send, reply_size, 0,
+                    sendto(ctx->local_fd, (const void*)buf_to_send, reply_size, 0,
                            (const struct sockaddr*)&client_addr, client_len);
                 } else {
                     if (debug_mode) {
                         l = LOCAL_RECEIVE_REPLY_SIZE_ERROR;
-                        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                            (THREAD_MASK & ((uint64_t)log_thread_id << 32));
                         log_write(pl);
                     }
                 }
                 if (debug_mode) {
                     l = LOCAL_RECEIVE_DNS_MESSAGE_FREE_SUCCESS;
-                    uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+                    uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                        (THREAD_MASK & ((uint64_t)log_thread_id << 32));
                     log_write(pl);
                 }
                 return 1;
@@ -474,7 +672,8 @@ int local_receive() {
      * ------------------------------------------------------------------ */
     if (debug_mode) {
         l = LOCAL_RECEIVE_CANNOT_HIT_CACHE;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+            (THREAD_MASK & ((uint64_t)log_thread_id << 32));
         log_write(pl);
     }
 
@@ -485,7 +684,8 @@ int local_receive() {
     if (msg.header == NULL) {
         if (debug_mode) {
             l = LOCAL_RECEIVE_DECODE_NULL_HEADER;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         dns_message_free(&msg);
@@ -498,7 +698,8 @@ int local_receive() {
     if (!id_map_insert(orig_id, &client_addr, &new_id)) {  // no empty slot, drop
         if (debug_mode) {
             l = LOCAL_RECEIVE_NO_EMPTY_SLOT_DROP;
-            uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+            uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+                (THREAD_MASK & ((uint64_t)log_thread_id << 32));
             log_write(pl);
         }
         dns_message_free(&msg);
@@ -508,12 +709,13 @@ int local_receive() {
     uint16_t new_id_be = htons(new_id);
     memcpy(buf_recv, &new_id_be, 2);
 
-    sendto(remote_socket_fd, (const void*)buf_recv, msg_size, 0,
-           (const struct sockaddr*)&remote_addr, sizeof(remote_addr));
+    sendto(ctx->remote_fd, (const void*)buf_recv, msg_size, 0,
+           (const struct sockaddr*)&ctx->remote_addr, sizeof(ctx->remote_addr));
 
     if (debug_mode) {
         l = LOCAL_RECEIVE_SENT_TO_UPSTREAM;
-        uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
+        uint64_t pl = (EVENT_MASK & ((uint64_t)l << 48)) |
+            (THREAD_MASK & ((uint64_t)log_thread_id << 32));
         log_write(pl);
     }
     dns_message_free(&msg);

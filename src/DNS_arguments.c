@@ -294,7 +294,7 @@ void load_cached_dns_file(void* cache) {
      * loading a file with ~1M entries does not produce ~1M log lines.
      * Save/restore so the flag is reentrant-safe and runtime cache_insert()
      * calls (from cache_answers_from_msg) still log normally afterwards. */
-    extern int cache_insert_logging_suppressed;
+    extern _Thread_local int cache_insert_logging_suppressed;
     int saved_log_flag = cache_insert_logging_suppressed;
     cache_insert_logging_suppressed = 1;
 

@@ -2,7 +2,14 @@
 
 #include "../include/DNS_debug.h"
 
-void read_data(log_event_t l) {
+void read_data(log_event_t l, uint16_t thread_id) {
+    /* Writer tag first, so every moredebug line shows which thread
+     * emitted the event. */
+    if (thread_id == LOG_THREAD_ID_MAIN)
+        printf("[main] ");
+    else
+        printf("[pth%u] ", (unsigned)thread_id);
+
     switch (l) {
         case LOCAL_SOCKET_FAILED: {
             printf("LOCAL_SOCKET_FAILED\n");

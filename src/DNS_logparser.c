@@ -11,7 +11,10 @@
  *
  *   [timestamp : 8 bytes]   uint64_t, microseconds since epoch (gettimeofday)
  *   [payload  : 8 bytes]    uint64_t, bits 48..63 = event id (log_event_t),
- *                                   bits  0..47 = info field
+ *                                   bits 32..47 = writer thread id
+ *                                                 (0-based worker index, or
+ *                                                 0xFFFF for the main thread),
+ *                                   bits  0..31 = info field
  *
  * A few events are immediately followed by extra raw bytes written via
  * log_write_bytes().  Currently the only such event is CACHE_FIND_SRC, which
@@ -21,8 +24,8 @@
  * This program reads the binary stream from stdin in a loop until EOF and
  * prints one human-readable line per record.  Each line looks like:
  *
- *   [2026-08-06 11:46:10.123456] [✅] get_dns_header_success: Get DNS header id=4660 success.
- *   [2026-08-06 11:46:10.125956] [ERROR] id_map_erase_id_map_used_err: ID map erase error, You tried to erase slot 42 but it does not exist.
+ *   [2026-08-06 11:46:10.123456] [pth3] [✅] Get DNS header id=4660 success.
+ *   [2026-08-06 11:46:10.125956] [main] [ERROR] ID map erase error, You tried to erase slot 42 but it does not exist.
  *
  * The lowercase event name is kept as a tag right after the status prefix so
  * that pipeline filters such as `grep "cache"` or `grep "id_map"` still work.
@@ -567,7 +570,7 @@ static void print_human_message(log_event_t ev, uint64_t info) {
         default:
             /* Unknown event id — surface the raw info for debuggability. */
             if (info != 0) {
-                printf("Unknown event, info=0x%012llx.", (unsigned long long)info);
+                printf("Unknown event, info=0x%08llx.", (unsigned long long)info);
             } else {
                 printf("Unknown event.");
             }
@@ -612,12 +615,18 @@ int main(int argc, char** argv) {
         }
 
         log_event_t ev = (log_event_t)((pl & EVENT_MASK) >> 48);
+        uint16_t thread_id = (uint16_t)((pl & THREAD_MASK) >> 32);
         uint64_t info = pl & INFO_MASK;
 
         format_ts(ts, tbuf, sizeof(tbuf));
 
-        /* Fixed header: [timestamp] */
+        /* Fixed header: [timestamp] [writer thread] */
         printf("[%s] ", tbuf);
+        if (thread_id == LOG_THREAD_ID_MAIN) {
+            printf("[main] ");
+        } else {
+            printf("[pth%u] ", (unsigned)thread_id);
+        }
 
         /* Status prefix: [✅]/[ERROR]/[WARN]/[INFO] + lowercase event_name + ":" */
         print_prefix(event_level(ev), use_color);

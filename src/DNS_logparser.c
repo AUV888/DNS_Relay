@@ -1,12 +1,12 @@
 /*
- * DNS_logparser.c — offline binary log parser for DNS_Relay.
+ * DNS_logparser.c — offline binary log parser for SND.
  *
  * Usage:
- *   cat dns_relay.log | ./bin/Parser
- *   cat dns_relay.log | ./bin/Parser | grep "cache"
- *   cat dns_relay.log | ./bin/Parser --color | less -R
+ *   cat dns.log | ./bin/Parser
+ *   cat dns.log | ./bin/Parser | grep "cache"
+ *   cat dns.log | ./bin/Parser --color | less -R
  *
- * The DNS_Relay server writes a binary log when run with -d / -dd (debug mode).
+ * The SND server writes a binary log when run with -d / -dd (debug mode).
  * Each log_write(payload) call emits a fixed 16-byte record:
  *
  *   [timestamp : 8 bytes]   uint64_t, microseconds since epoch (gettimeofday)
@@ -590,7 +590,7 @@ int main(int argc, char** argv) {
         } else {
             fprintf(stderr,
                     "Parser: unknown argument '%s'\n"
-                    "Usage: cat dns_relay.log | ./bin/Parser [--color|--no-color]\n",
+                    "Usage: cat dns.log | ./bin/Parser [--color|--no-color]\n",
                     argv[i]);
             return 1;
         }

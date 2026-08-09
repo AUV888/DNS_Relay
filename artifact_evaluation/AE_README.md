@@ -9,7 +9,7 @@ Please make sure that you are in the root directory of the repository and run
 
 ```bash
 make clean && make
-sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/cached_domain.txt
+sudo ./bin/SND -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/cached_domain.txt
 ```
 
 If you want to test more arguments, please refer to the argument lists below.
@@ -18,7 +18,6 @@ If you want to test more arguments, please refer to the argument lists below.
 | ------------------ | ------ | -------------- | -------------- | ---------------------------------------------------------------------------------------- |
 | `--server`       | `-s` | `<ipv4>`     | *(required)* | Upstream DNS server address in dotted-decimal form. Program exits with usage if missing. |
 | `--debug`        | `-d` | `[log_file]` | off            | Enable debug logging. If `log_file` is omitted, an auto-named file is used.            |
-| `--moredebug`    | `-m` | `[log_file]` | off            | More verbose debug logging; otherwise the same as `--debug`.                           |
 | `--cached`       | `-c` | `<file>`     | none           | Load pre-cached DNS records from `<file>` at startup.                                  |
 | `--nonblocking`  | `-n` | *(none)*     | blocking       | Switch the event loop to non-blocking I/O. Without this flag, blocking mode is used.     |
 | `--listenport`   | `-l` | `<1-65535>`  | `53`         | Local UDP port to listen on for client DNS queries.                                      |
@@ -75,7 +74,7 @@ Now, we'll start to test the no-cache QPS of our DNS server.
 
 ```bash
 #Terminal 1
-sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8
+sudo ./bin/SND -l 5678 -s 8.8.8.8
 ```
 
 ```bash
@@ -121,7 +120,7 @@ Please make sure that you are in the root directory of the repository and you've
 
 ```bash
 #Terminal 1
-sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8
+sudo ./bin/SND -l 5678 -s 8.8.8.8
 ```
 
 ```bash
@@ -168,7 +167,7 @@ Please make sure that you are in the root directory of the repository and you've
 
 ```bash
 #Terminal 1
-sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/full_cache.txt
+sudo ./bin/SND -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/full_cache.txt
 ```
 
 ```bash

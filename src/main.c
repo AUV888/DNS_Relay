@@ -23,7 +23,7 @@ static void sigint_handler(int sig) {
 
 int main(int argc, char* argv[]) {
     parse_arguments(argc, argv);
-    printf("%s\n", dns_server_addr);
+    printf("Upstream Server IPv4: %s\n", dns_server_addr);
 
     struct sigaction sa;
     sa.sa_handler = sigint_handler;

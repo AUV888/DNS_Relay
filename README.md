@@ -1,39 +1,35 @@
-# 🚀 DNS Relay - Curriculum Practice of Computer Networks
+# 🚀 **SND** - **S**ND's **N**on-recursive **D**NS
+
+[![C Standards](https://img.shields.io/badge/Language-POSIX%20C-blue.svg)]()  [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS-brightgreen.svg)]()  [![Academic Score](https://img.shields.io/badge/Course%20Score-99%2F100-brightgreen.svg)]()  [![Artifacts Available](https://img.shields.io/badge/Artifacts-Available-brightgreen)](./artifact_evaluation/AE_README.md)
 
 ## 📖 Project Overview
 
-A DNS relay server implemented in C language, supporting DNS caching, request forwarding, and real-time monitoring. This project is the curriculum practice assignment for "Computer Network" from BUPT, running on Linux environment.
+**SND** (**S**ND's **N**on-recursive **D**NS) is a lightweight, high-performance DNS relay server engineered in pure POSIX C, supporting DNS caching, request forwarding, and full logging. This project is the curriculum practice assignment for *Computer Network* from BUPT, running in a Linux / macOS environment.
 
-**This project received a score of 99 out of 100 in Curriculum Practice of Computer Networks (1.5 credits).**
+The project's original name was **DNS Relay**, but we changed its name to emphasize that it is not merely a passive forwarder, but a high-capacity non-recursive DNS engine capable of blazingly fast local table lookups at scale (benchmarked at **1M+** entries) alongside transparent relaying.
 
-To reproduce the figures, please refer to [./artifact_evaluation/AE_README.md](./artifact_evaluation/AE_README.md).
+> 🎓 **Course Project Notice:** This project was developed as the curriculum practice assignment for *Computer Networks* at BUPT and received a final score of **99 / 100** (1.5 credits).
+>
+> 🔬 **Artifact Evaluation:** To reproduce our figures and benchmark results, please refer to [./artifact_evaluation/AE_README.md](./artifact_evaluation/AE_README.md).
 
 ## ✨ Features
 
-- ✅ **High Performance** - 0 Cache: **9218** QPS, Mixed Cache: **33218** QPS, Full Cache: **132869** QPS
+- ✅ **High Performance** - Zero Cache: **9,218** QPS, Mixed Cache: **33,218** QPS, Full Cache: **132,869** QPS
+> *Note: Tuning kernel socket buffer sizes yields an additional performance increase of 12.24% (Zero Cache) and 8.80% (Full Cache).*
+
 - ✅ **DNS Protocol Parsing** - Full support for DNS message format
 - ✅ **Lazy & Periodic Cleanup Cache Mechanism** - Efficient caching of DNS query results
 - ✅ **Concurrent Processing** - Support for multiple simultaneous clients
 - ✅ **Configuration Support** - Runtime configuration updates
+- ❌ **Single-Threaded by Design** - Click [here](https://github.com/AUV888/DNS_Relay/blob/feature_multithread/README.md) to explore our experiments with multithreading and performance trade-offs
 
 ## 🛠️ Development Environment
 
-### Prerequisites
-
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install gcc make gdb git -y
-
-# CentOS/RHEL
-sudo yum install gcc make gdb git -y
-```
-
 ### Recommended Environment
 
-- **OS**: Ubuntu 24.04 LTS / WSL2
-- **Compiler**: GCC 13.3.0
-- **Debugger**: GDB 15.0.50
+- **OS**: Ubuntu 24.04 LTS / macOS 26
+- **Compiler**: GCC 13.3.0 / Apple clang 21.0.0
+- **Debugger**: GDB 15.0.50 / LLDB Apple Swift 6.3.3
 - **Editor**: VSCode with C/C++ extension
 
 ## 🚀 Quick Start
@@ -50,22 +46,22 @@ git clone https://github.com/AUV888/DNS_Relay.git
 make
 ```
 
-Output: `./bin/DNS_Relay`
+Output: `./bin/SND`
 
 ### 3. Run Server
 
 ```bash
 # Required: -s/--server specifies the upstream DNS server (dotted-decimal IPv4)
-sudo ./bin/DNS_Relay -s 8.8.8.8
+sudo ./bin/SND -s 8.8.8.8
 
 # Listen on a custom port (avoids needing sudo if >= 1024)
-./bin/DNS_Relay -s 8.8.8.8 -l 5353
+./bin/SND -s 8.8.8.8 -l 5353
 
 # Run in non-blocking mode with debug log
-./bin/DNS_Relay -s 8.8.8.8 -n -d ./logs/relay.log
+./bin/SND -s 8.8.8.8 -n -d ./logs/relay.log
 
 # Print full help
-./bin/DNS_Relay
+./bin/SND
 ```
 
 > Listening on port 53 requires root privileges. Use `-l <port>` to bind to a
@@ -81,7 +77,6 @@ as long as flags requiring an argument appear last.
 | ------------------ | ------ | -------------- | -------------- | ---------------------------------------------------------------------------------------- |
 | `--server`       | `-s` | `<ipv4>`     | *(required)* | Upstream DNS server address in dotted-decimal form. Program exits with usage if missing. |
 | `--debug`        | `-d` | `[log_file]` | off            | Enable debug logging. If `log_file` is omitted, an auto-named file is used.            |
-| `--moredebug`    | `-m` | `[log_file]` | off            | More verbose debug logging; otherwise the same as `--debug`.                           |
 | `--cached`       | `-c` | `<file>`     | none           | Load pre-cached DNS records from `<file>` at startup.                                  |
 | `--nonblocking`  | `-n` | *(none)*     | blocking       | Switch the event loop to non-blocking I/O. Without this flag, blocking mode is used.     |
 | `--listenport`   | `-l` | `<1-65535>`  | `53`         | Local UDP port to listen on for client DNS queries.                                      |
@@ -91,31 +86,27 @@ as long as flags requiring an argument appear last.
 
 ```bash
 # Required server only
-./bin/DNS_Relay -s 8.8.8.8
+./bin/SND -s 8.8.8.8
 
 # Custom listen / upstream port
-./bin/DNS_Relay -s 8.8.8.8 -l 5353 -u 53
-
-# Non-blocking + verbose log
-./bin/DNS_Relay -s 8.8.8.8 -n -m ./logs/verbose.log
+./bin/SND -s 8.8.8.8 -l 5353 -u 53
 
 # Long-option style
-./bin/DNS_Relay --server 8.8.8.8 --listenport 5353 --nonblocking
+./bin/SND --server 8.8.8.8 --listenport 5353 --nonblocking
 ```
 
 ## 📁 Project Structure
 
 ```
-DNS_Relay/
+SND/
 ├── bin/                       # Build output (executable + .o files)
-│   └── DNS_Relay              #   final binary
+│   └── SND                    #   final binary
 ├── include/                   # Public headers
 │   ├── DNS_arguments.h        #   command-line argument globals & parser
 │   ├── DNS_cache.h            #   DNS cache (lazy + periodic cleanup)
 │   ├── DNS_convert.h          #   DNS wire format encode / decode
 │   ├── DNS_debug.h            #   binary 128-bit log writer + event enums
 │   ├── DNS_id.h               #   transaction-ID remapping table
-│   ├── DNS_readlog.h          #   print debug info for moredebug mode
 │   ├── DNS_server.h           #   socket setup, blocking / non-blocking loops
 │   ├── DNS_struct.h           #   DNS message data structures
 │   └── DNS_util.h             #   uint8_t pointer stack used during parsing
@@ -127,7 +118,6 @@ DNS_Relay/
 │   ├── DNS_debug.c            #   128-bit binary log file writer
 │   ├── DNS_id.c               #   ID-mapping bookkeeping
 │   ├── DNS_server.c           #   recvfrom / sendto event loop
-│   ├── DNS_readlog.c          #   print debug info for moredebug mode
 |   ├── DNS_logparser.c        #   parser for binary logs
 │   └── DNS_util.c             #   helper utilities
 ├── Makefile                   # Build configuration
@@ -139,18 +129,25 @@ DNS_Relay/
 ### Basic Testing
 
 ```bash
-sudo ./bin/DNS_Relay -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/cached_domain.txt -d ./testing.log
+sudo ./bin/SND -l 5678 -s 8.8.8.8 -c ./artifact_evaluation/cached_domain.txt -d ./testing.log
 dnsperf 127.0.0.1 -d ./artifact_evaluation/A_Request.txt -Q 50000 -q 50000 -p 5678 -l 60
 ```
 
 ### Configure Cached Domains
+
 To use the `--cached (-c)` option, you need to prepare a list that records the IPv4 - domain pairs. This is an example:
+
 ```text
+# cached_domain.txt
+
+# Standard local mappings 
 142.251.150.119 www.google.com
 20.205.243.166 github.com
 
+# Blocklist
 0.0.0.0 blocklist_website.com
 
+# Internal network mappings
 10.3.8.6 internal_website.com
 ```
 
@@ -169,9 +166,9 @@ make debug
 
 ## 📝 Log Parsing
 
-When you enabled `--debug (-d)` or `--moredebug (-m)` option, you will get a binary log file which is not friendly for human to read. To help you better monitor what happened to the server as well as ensuring its high performance, we introduced a utility program `Parser` to help reading the log.
+When you enabled `--debug (-d)` option, you will get a binary log file which is not friendly for human to read. To help you better monitor what happened to the server as well as ensuring its high performance, we introduced a utility program `Parser` to help reading the log.
 
-`Parser` is located at `./bin` by default, which is the same directory where `DNS_Relay` locates. `Parser` reads binary data from `stdin` by `scanf()` and prints out the readable information to `stdout` by `printf()`. We highly recommend that you use pipe. A typical usage of `Parser` may be:
+`Parser` is located at `./bin` by default, which is the same directory where `SND` locates. `Parser` reads binary data from `stdin` and prints out the readable information to `stdout`. We highly recommend that you use pipe. A typical usage of `Parser` may be:
 
 ```bash
 # Save to a file and read it later
@@ -194,6 +191,6 @@ cat /path/to/file | ./bin/Parser | grep -i "warn"
 
 ## 👥 Development Team
 
-| Name   | Student ID | Responsibilities |
-| ------ | ---------- | ---------------- |
-| AUV888 | --         | All              |
+| Contributor | Responsibilities                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------ |
+| AUV888      | System Architecture,<br /> I/O Event Loop, Protocol Parsing,<br /> Binary Logging & Benchmarking |

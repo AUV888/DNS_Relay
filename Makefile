@@ -32,19 +32,19 @@ endif
 INC_FLAGS = -I./include
 HEADERS   = $(wildcard include/*.h)
 
-# ---- DNS_Relay sources (every .c under ./src except DNS_logparser.c) -----
+# ---- SND sources (every .c under ./src except DNS_logparser.c) -----
 RELAY_SRC = $(filter-out src/DNS_logparser.c, $(wildcard src/*.c))
 RELAY_OBJ = $(patsubst src/%.c, $(OBJDIR)/%.o, $(RELAY_SRC))
 
 # ---- Output binaries ----------------------------------------------------
-TARGET    = ./bin/DNS_Relay
+TARGET    = ./bin/SND
 PARSER    = ./bin/Parser
 
 .PHONY: all build debug clean
 
 all: build
 
-# (1) Build ./bin/DNS_Relay from all .c under ./src (except DNS_logparser.c)
+# (1) Build ./bin/SND from all .c under ./src (except DNS_logparser.c)
 # (2) Build ./bin/Parser from ./src/DNS_logparser.c as a single TU
 build: $(TARGET) $(PARSER)
 
@@ -55,7 +55,7 @@ $(OBJDIR)/%.o: src/%.c $(HEADERS)
 	@mkdir -p $(OBJDIR)
 	$(CC) $(CFLAGS) $(INC_FLAGS) -c $< -o $@
 
-# Link all relay objects into ./bin/DNS_Relay.
+# Link all relay objects into ./bin/SND.
 $(TARGET): $(RELAY_OBJ)
 	@mkdir -p ./bin
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^

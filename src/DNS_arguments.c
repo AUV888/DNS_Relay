@@ -30,7 +30,6 @@ static void print_usage(const char* prog) {
             "\n"
             "Optional:\n"
             "  -d, --debug        [log_file] output debug log (file name is optional)\n"
-            "  -m, --moredebug    [log_file] output more detailed debug log (file name is optional)\n"
             "  -c, --cached       <file>     read cached DNS from file (file name is required)\n"
             "  -n, --nonblocking             use non-blocking mode (no argument; default is blocking)\n"
             "  -l, --listenport   <1-65535>  local port to listen for DNS queries (default 53)\n"
@@ -45,7 +44,7 @@ static void print_usage(const char* prog) {
 static void make_default_log_name(char* buf, size_t size) {
     time_t now = time(NULL);
     struct tm* t = localtime(&now);
-    snprintf(buf, size, "DNS_Relay_%04d%02d%02d_%02d%02d%02d.log", t->tm_year + 1900, t->tm_mon + 1,
+    snprintf(buf, size, "SND_%04d%02d%02d_%02d%02d%02d.log", t->tm_year + 1900, t->tm_mon + 1,
              t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
 }
 
@@ -61,8 +60,6 @@ static char long_to_short(const char* name) {
     }
     if (strcmp(name, "debug") == 0)
         return 'd';
-    if (strcmp(name, "moredebug") == 0)
-        return 'm';
     if (strcmp(name, "cached") == 0)
         return 'c';
     if (strcmp(name, "server") == 0)
@@ -101,18 +98,6 @@ static int handle_short(char opt, int argc, char* argv[], int i, const char* pro
         case 'd':
             if (debug_mode < 1)
                 debug_mode = 1;
-            if (i + 1 < argc && !is_option(argv[i + 1])) {
-                strncpy(log_file, argv[i + 1], 255);
-                log_file[255] = '\0';
-                return 1;
-            } else {
-                if (log_file[0] == '\0')
-                    make_default_log_name(log_file, sizeof(log_file));
-            }
-            return 0;
-
-        case 'm':
-            debug_mode = 2;
             if (i + 1 < argc && !is_option(argv[i + 1])) {
                 strncpy(log_file, argv[i + 1], 255);
                 log_file[255] = '\0';
@@ -194,7 +179,7 @@ static int handle_short(char opt, int argc, char* argv[], int i, const char* pro
 }
 
 void parse_arguments(int argc, char* argv[]) {
-    const char* prog = argc > 0 ? argv[0] : "DNS_Relay";
+    const char* prog = argc > 0 ? argv[0] : "SND";
 
     for (int i = 1; i < argc;) {
         const char* arg = argv[i];
@@ -241,8 +226,6 @@ void parse_arguments(int argc, char* argv[]) {
                 if (!is_last && (opt == 'd' || opt == 'm')) {
                     if (opt == 'd' && debug_mode < 1)
                         debug_mode = 1;
-                    if (opt == 'm')
-                        debug_mode = 2;
                     if (log_file[0] == '\0')
                         make_default_log_name(log_file, sizeof(log_file));
                 } else if (!is_last && opt == 'n') {
@@ -339,6 +322,6 @@ void load_cached_dns_file(void* cache) {
     cache_insert_logging_suppressed = saved_log_flag;
 
     fclose(fp);
-    fprintf(stdout, "load_cached_dns_file: loaded %d, skipped %d from '%s'\n",
+    fprintf(stdout, "Load cached DNS file: loaded %d, skipped %d from '%s'\n",
             loaded, skipped, cached_file);
 }

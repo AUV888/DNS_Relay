@@ -301,24 +301,10 @@ void server_mode_non_blocking_set() {
     }
 }
 
-static inline void cache_answers_from_msg(dns_message_t* msg) {
-    if (!g_cache || !msg || !(msg->header))
+static inline void cache_answers_from_msg(uint32_t* ipv4, uint32_t* ttl, char* name) {
+    if (!g_cache)
         return;
-
-    if (DNS_GET_RCODE(msg->header->flags) != DNS_RCODE_OK)
-        return;
-
-    dns_resource_record_t* rr = msg->answer;
-    while (rr) {
-        if (rr->type == DNS_TYPE_A && rr->name != NULL) {
-            uint8_t* ipaddr = rr->rd_data.a_record.ip_addr;
-            uint32_t ip = ((uint32_t)ipaddr[0] << 24) | ((uint32_t)ipaddr[1] << 16) |
-                          ((uint32_t)ipaddr[2] << 8) | (uint32_t)ipaddr[3];
-            int ttl = (rr->ttl > 0) ? (int)rr->ttl : 60;
-            cache_insert(g_cache, rr->name, ip, ttl);
-        }
-        rr = rr->next;
-    }
+    cache_insert(g_cache, name, *ipv4, *ttl);
     if (debug_mode) {
         log_event_t l = REMOTE_RECEIVE_CACHED_ANSWER_SUCCESS;
         uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
@@ -339,7 +325,7 @@ int remote_receive() {
         /* EAGAIN / EWOULDBLOCK means the buffer is empty — stop draining. */
         return 0;
     }
-    if (msg_size < 2) {
+    if (msg_size < 12) {
         if (debug_mode) {
             l = REMOTE_RECEIVE_MSG_SIZE_ERR;
             uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
@@ -382,11 +368,19 @@ int remote_receive() {
             uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
             log_write(pl);
         }
-        dns_message_t msg;
-        memset(&msg, 0, sizeof(msg));
-        dns_message_decode(&msg, buf_recv, msg_size);
-        cache_answers_from_msg(&msg);
-        dns_message_free(&msg);
+        char name[DNS_RR_NAME_MAX_SIZE] = {0};
+        uint32_t ipv4 = 0, ttl = 0;
+        char is_A_type = 0;
+        uint8_t* buf = buf_recv + 12;
+        uint8_t* start = buf_recv;
+        buf = get_dns_question(NULL, buf, start, start + msg_size);
+        if (buf != NULL) {
+            buf = get_dns_answer(buf, start, start + msg_size, name, &ipv4, &is_A_type, &ttl);
+        }
+        if (is_A_type) {
+            cache_answers_from_msg(&ipv4, &ttl, name);
+        }
+
     } else if (g_cache == NULL && debug_mode) {
         l = REMOTE_RECEIVE_NO_GLOBAL_CACHE;
         uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
@@ -478,21 +472,16 @@ int local_receive() {
         log_write(pl);
     }
 
-    dns_message_t msg;
-    memset(&msg, 0, sizeof(msg));
-    dns_message_decode(&msg, buf_recv, msg_size);
-
-    if (msg.header == NULL) {
+    if (msg_size < 12) {
         if (debug_mode) {
             l = LOCAL_RECEIVE_DECODE_NULL_HEADER;
             uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
             log_write(pl);
         }
-        dns_message_free(&msg);
         return 1; /* consumed one datagram */
     }
 
-    uint16_t orig_id = msg.header->id;
+    uint16_t orig_id = (buf_recv[0] << 8) | (buf_recv[1]);
 
     uint16_t new_id = 0;
     if (!id_map_insert(orig_id, &client_addr, &new_id)) {  // no empty slot, drop
@@ -501,7 +490,6 @@ int local_receive() {
             uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
             log_write(pl);
         }
-        dns_message_free(&msg);
         return 1;
     }
 
@@ -516,6 +504,5 @@ int local_receive() {
         uint64_t pl = EVENT_MASK & ((uint64_t)l << 48);
         log_write(pl);
     }
-    dns_message_free(&msg);
     return 1;
 }

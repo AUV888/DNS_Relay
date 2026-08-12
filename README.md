@@ -15,7 +15,18 @@ The project's original name was **DNS Relay**, but we changed its name to emphas
 ## ✨ Features
 
 - ✅ **High Performance** - Zero Cache: **9,218** QPS, Mixed Cache: **33,218** QPS, Full Cache: **132,869** QPS
-> *Note: Tuning kernel socket buffer sizes yields an additional performance increase of 12.24% (Zero Cache) and 8.80% (Full Cache).*
+<blockquote>
+
+<details>
+<summary>More details about performance</summary>
+<br>
+<p> <strong>Testing caveats and methodology:</strong> The "Zero Cache" QPS value (9,218) was measured using the recommended 60-second test, which processes a 1M-record file approximately 1.34 times. This results in about 34% of queries being repeated and served from the cache, thus <strong>not representing a purely uncached scenario</strong>. We retain this figure because it demonstrates the system's throughput ceiling under favorable network conditions (low RTT) and serves as an upper-bound reference.</p>
+
+<p> <strong>Real-world performance and variability:</strong> In a strictly uncached test (using a 20-second duration to avoid repetition) with a realistic 250 ms RTT to the upstream server, the system sustains approximately <strong>7,000 QPS</strong>. Furthermore, QPS is highly dependent on the network environment and the client hardware. For example, tests on a MacBook Pro typically yield higher results than on a WSL (Windows Subsystem for Linux) laptop due to differences in the network stack and loopback latency. Tuning kernel socket buffer sizes provides an additional performance gain of 12.24% (Zero Cache) and 8.80% (Full Cache).</p>
+
+<p> Given this variability, <strong>the Full Cache QPS (132,869) is the most important and stable indicator of the system's internal processing capability</strong>, as it is independent of external network conditions. We recommend focusing on this metric to evaluate the core engine's performance.</p>
+</details>
+</blockquote>
 
 - ✅ **DNS Protocol Parsing** - Full support for DNS message format
 - ✅ **Lazy & Periodic Cleanup Cache Mechanism** - Efficient caching of DNS query results

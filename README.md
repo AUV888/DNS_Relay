@@ -119,8 +119,7 @@ SND/
 │   ├── DNS_debug.h            #   binary 128-bit log writer + event enums
 │   ├── DNS_id.h               #   transaction-ID remapping table
 │   ├── DNS_server.h           #   socket setup, blocking / non-blocking loops
-│   ├── DNS_struct.h           #   DNS message data structures
-│   └── DNS_util.h             #   uint8_t pointer stack used during parsing
+│   └── DNS_struct.h           #   DNS message data structures
 ├── src/                       # Implementation files
 │   ├── main.c                 #   program entry, calls parse_arguments + server
 │   ├── DNS_arguments.c        #   GNU-style argv parser
@@ -129,8 +128,7 @@ SND/
 │   ├── DNS_debug.c            #   128-bit binary log file writer
 │   ├── DNS_id.c               #   ID-mapping bookkeeping
 │   ├── DNS_server.c           #   recvfrom / sendto event loop
-|   ├── DNS_logparser.c        #   parser for binary logs
-│   └── DNS_util.c             #   helper utilities
+|   └── DNS_logparser.c        #   parser for binary logs
 ├── Makefile                   # Build configuration
 └── README.md                  # This file
 ```

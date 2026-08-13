@@ -373,7 +373,7 @@ int remote_receive() {
         char is_A_type = 0;
         uint8_t* buf = buf_recv + 12;
         uint8_t* start = buf_recv;
-        buf = get_dns_question(NULL, buf, start, start + msg_size);
+        buf = get_dns_question(buf, start, start + msg_size);
         if (buf != NULL) {
             buf = get_dns_answer(buf, start, start + msg_size, name, &ipv4, &is_A_type, &ttl);
         }

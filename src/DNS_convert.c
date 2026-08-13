@@ -8,7 +8,6 @@
 
 #include "../include/DNS_debug.h"
 #include "../include/DNS_struct.h"
-#include "../include/DNS_util.h"
 
 uint32_t convert_read_bytes(uint8_t** buf, int bytes) {
     if (bytes == 1) {
@@ -42,7 +41,7 @@ uint32_t convert_read_bytes(uint8_t** buf, int bytes) {
 static const uint8_t* fast_decode_name(const uint8_t* pos, const uint8_t* pkt_start,
                                        const uint8_t* pkt_end, char* result, int* result_len);
 
-uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf, uint8_t* start, const uint8_t* end) {
+uint8_t* get_dns_question(uint8_t* buf, uint8_t* start, const uint8_t* end) {
     int qd_cnt = (start[4] << 8) | start[5], i = 0, idx = 0;
     char name[DNS_RR_NAME_MAX_SIZE] = {};
     for (i = 0; i < qd_cnt; i++) {

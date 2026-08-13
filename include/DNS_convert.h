@@ -18,8 +18,7 @@ uint32_t convert_read_bytes(uint8_t** buf, int bytes);
 @param end One-past-end pointer of the packet buffer (for bounds checking)
 @return New buffer pointer, or NULL on error
 */
-uint8_t* get_dns_question(dns_message_t* msg, uint8_t* buf, uint8_t* start,
-                          const uint8_t* end);
+uint8_t* get_dns_question(uint8_t* buf, uint8_t* start, const uint8_t* end);
 
 /*
 @brief A utility function to get dns answer
